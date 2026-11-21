@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TQ2 Game Data</title>
 <!-- TQ2 Tweaks data page: monsters with their drop tables, and which affixes each item type can roll with which chance.
-     Reads ../ShadeHud/game_data.js (game data dump, GameDataDump in config.lua) and ../ShadeHud/affix_data.js (F9).
+     Reads ../TQ2Tweaks/game_data.js (game data dump, GameDataDump in config.lua) and ../TQ2Tweaks/affix_data.js (F9).
      Works offline, no libraries. -->
-<link rel="stylesheet" href="../ShadeHud/page_style.css">
+<link rel="stylesheet" href="../TQ2Tweaks/page_style.css">
 <style>
   .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
   .tabs button { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 8px 16px;
@@ -69,7 +69,7 @@
   <header>
     <h1>TQ2 Game Data</h1>
     <span class="status" id="status"></span>
-    <a class="page-link" href="../ShadeHud/loot_filter.html">Loot filter editor →</a>
+    <a class="page-link" href="../TQ2Tweaks/loot_filter.html">Loot filter editor →</a>
   </header>
   <div class="tabs" role="tablist">
     <button id="tabMonsters" class="on" role="tab">Monsters &amp; drops</button>
@@ -115,10 +115,10 @@
   <span id="dataInfo"></span></p>
 </main>
 
-<script src="../ShadeHud/game_data.js"></script>
-<script src="../ShadeHud/affix_data.js"></script>
-<script src="../ShadeHud/affix_parse.js"></script>
-<script src="../ShadeHud/icons.js"></script>
+<script src="../TQ2Tweaks/game_data.js"></script>
+<script src="../TQ2Tweaks/affix_data.js"></script>
+<script src="../TQ2Tweaks/affix_parse.js"></script>
+<script src="../TQ2Tweaks/icons.js"></script>
 <script>
 "use strict";
 const GAME = window.TQ2_GAME_DATA;

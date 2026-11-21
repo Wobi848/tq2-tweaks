@@ -1,4 +1,4 @@
-# TQ2 Tweaks (ShadeHud) – shade display, rewards, speed, points, crafting and a damage meter for Titan Quest II
+# TQ2 Tweaks – shade display, rewards, speed, points, crafting and a damage meter for Titan Quest II
 
 Shows the **shades of the Spirit mastery** large and clearly below your character, instead of only small at the
 resource orb in the bottom right:
@@ -24,7 +24,7 @@ Download the normal version, not the DEV version. The general UE4SS release from
 ## Download
 
 Get `tq2-tweaks-<version>.zip` from the [releases](https://github.com/Wobi848/tq2-tweaks/releases); it contains
-the folder `ShadeHud`. Online data pages (monsters & drops, item affixes, loot filter editor):
+the folder `TQ2Tweaks`. Online data pages (monsters & drops, item affixes, loot filter editor):
 <https://wobi848.github.io/tq2-tweaks/>
 
 ## Installation
@@ -34,18 +34,18 @@ the folder `ShadeHud`. Online data pages (monsters & drops, item affixes, loot f
    ```sh
    <Steam>\steamapps\common\Titan Quest II\TQ2\Binaries\Win64\
    ```
-2. **Install the mod:** copy the folder `ShadeHud` to
+2. **Install the mod:** copy the folder `TQ2Tweaks` to
    ```sh
    ...\TQ2\Binaries\Win64\UE4SS\Mods\
    ```
-   Afterwards there is `UE4SS\Mods\ShadeHud\Scripts\main.lua`.
+   Afterwards there is `UE4SS\Mods\TQ2Tweaks\Scripts\main.lua`.
 3. **Enable it:** add this line to `UE4SS\Mods\mods.txt`, above the line `; Built-in keybinds, do not move up!`:
    ```sh
-   ShadeHud : 1
+   TQ2Tweaks : 1
    ```
    If there is also a `UE4SS\Mods\mods.json`, add it to that list as well:
    ```json
-   { "mod_name": "ShadeHud", "mod_enabled": true }
+   { "mod_name": "TQ2Tweaks", "mod_enabled": true }
    ```
 4. **Linux / Steam Deck (Proton) only:** in Steam → Titan Quest II → Properties → Launch options, enter:
    ```sh
@@ -96,35 +96,35 @@ too few still count, if the blacksmith can add it (a free affix place, or a usel
 prefix or suffix – to replace). **Presets** (Summoner, Survivability, Epic and better) give a starting point. Example: "Summoner: Rare+, 1 of the summon affixes",
 "Defence: Rare+, 2 of health/barrier/resistance", "Epic and better: Epic+".
 
-1. In game press **F9**. This writes `ShadeHud\affix_dump.txt` with all affixes, charms and relics of the game (and
-   the affixes of the items on the ground, shown as "on ground") and `ShadeHud\affix_data.js`, which the editor
-   loads by itself. It also writes `ShadeHud\gear.json` with your equipped items, bags and stash.
-2. Open `ShadeHud\loot_filter.html` in your browser (it works offline): it shows all affixes and your current
+1. In game press **F9**. This writes `TQ2Tweaks\affix_dump.txt` with all affixes, charms and relics of the game (and
+   the affixes of the items on the ground, shown as "on ground") and `TQ2Tweaks\affix_data.js`, which the editor
+   loads by itself. It also writes `TQ2Tweaks\gear.json` with your equipped items, bags and stash.
+2. Open `TQ2Tweaks\loot_filter.html` in your browser (it works offline): it shows all affixes and your current
    `loot_filter.lua`. Add rules, set rarity, item types and the number of affixes needed, and add affixes – each row
    shows the names the affix gives an item (e.g. "Beastcaller's … Wraithlord's") and its effect.
-3. Click **Save loot_filter.lua** and put the file into the `ShadeHud` folder.
+3. Click **Save loot_filter.lua** and put the file into the `TQ2Tweaks` folder.
 4. In the F5 menu (Items) switch **Loot filter** on. The mod notices a new or changed `loot_filter.lua` by itself
    within a few seconds.
 
 In game, the F5 tab **Filter** lists your rules: switch each one on or off and change its rarity and how many affixes
 it needs. The changes are written into `loot_filter.lua` (and shown by the editor after the next F9).
 
-For developers: with `GameDataDump = true` in `config.lua`, **Shift+F9** writes `ShadeHud\game_data.json` (all
+For developers: with `GameDataDump = true` in `config.lua`, **Shift+F9** writes `TQ2Tweaks\game_data.json` (all
 creatures with their drop lists, and which affixes each item type can roll). It loads every creature template of the
 game; once the game hung about 40 seconds later, so restart the game after a dump.
 
 Rewards, speed, points, crafting and auto pickup are meant **for single player only**. Back up your save games
 first.
 
-Settings are saved in `ShadeHud\user_settings.lua`. Delete the file to go back to the defaults.
+Settings are saved in `TQ2Tweaks\user_settings.lua`. Delete the file to go back to the defaults.
 Defaults, colour presets, the menu's look and the keys themselves (F5, F6, F7, F8, F9) are in
-`ShadeHud\Scripts\config.lua`.
+`TQ2Tweaks\Scripts\config.lua`.
 
 While the menu is open, character movement is blocked so the arrow keys only operate the menu.
 
 ## Troubleshooting
 
-- **Nothing shows up:** look for lines with `[ShadeHud]` in `UE4SS\UE4SS.log`. If there are none, UE4SS or the
+- **Nothing shows up:** look for lines with `[TQ2Tweaks]` in `UE4SS\UE4SS.log`. If there are none, UE4SS or the
   mod was not loaded (check step 3 and, on Linux, step 4). For more details set `DebugLog = true` in
   `config.lua`.
 - **The game crashes on start:** rename `dwmapi.dll` to `dwmapi.dll.disabled`; the game then starts without mods.

@@ -1,9 +1,9 @@
 # TQ2 Tweaks
 
 UE4SS Lua mod for Titan Quest II (Early Access 0.7.1, Unreal Engine 5.7; developed and tested on Linux/Proton).
-The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single player only.**
+The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single player only.**
 
-- Player guide (installation, keys, settings): [ShadeHud/README.md](ShadeHud/README.md)
+- Player guide (installation, keys, settings): [TQ2Tweaks/README.md](TQ2Tweaks/README.md)
 - Downloads: [releases](https://github.com/Wobi848/tq2-tweaks/releases); data pages online:
   <https://wobi848.github.io/tq2-tweaks/> (built into `docs/` by `tools/build_site.sh <game version>` from the
   dumps; only game data goes online – the ground items and the player's own loot filter are left out)
@@ -33,7 +33,7 @@ The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single p
 | Gear dump (with F9): equipped items and own inventories with affix tiers and rolls | `gear_dump.lua` | yes |
 | Mega dump (Ctrl+F9, with `GameDataDump`): every data asset via reflection | `mega_dump.lua`, `batch_job.lua` | no |
 | Data page: monsters & drops, affix chances per item kind | `tools/game_data.html` | – |
-| Affix dump (F9) incl. charms/relics, and loot filter | `affix_dump.lua`, `loot_rules.lua`, `equipment_pickup.lua`, `ShadeHud/loot_filter.html` | yes |
+| Affix dump (F9) incl. charms/relics, and loot filter | `affix_dump.lua`, `loot_rules.lua`, `equipment_pickup.lua`, `TQ2Tweaks/loot_filter.html` | yes |
 | Cleanup before a level change | `main.lua` (`RegisterLoadMapPreHook`), `player.lua` | no |
 | Loop timing (`TimingLog`, off by default) | `loop_timing.lua` | yes |
 
@@ -42,7 +42,7 @@ The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single p
 - **UE4SS Lua mod instead of a pak mod**: no game files are changed, which survives patches better. UE4SS is
   loaded through `dwmapi.dll`.
 - **Modules**: `main.lua` only wires things together. `config.lua` = defaults, `settings.lua` = values changed in
-  game (saved to `ShadeHud/user_settings.lua`), `ui.lua` = shared UMG building blocks,
+  game (saved to `TQ2Tweaks/user_settings.lua`), `ui.lua` = shared UMG building blocks,
   `*_menu_entries.lua` + `setting_entry.lua` = menu rows. A menu entry is
   `{ label, value(), change(direction, fast) }` or `{ header = "…" }`.
 - **Hooks only when needed**: the experience, drop and damage hooks are registered only once their feature is
@@ -156,9 +156,9 @@ The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single p
   `TQ2Inventory` objects found by their outer chain (up to 4 levels) leading to the player state; both keep items in
   `m_ContainerData.ItemSlots` like ground items. Per affix: `Level` (tier), `Category` (base/implicit/random) and the
   `Scale` of each effect (roll quality); the shown numbers themselves are formulas and not computed.
-- **Browser pages** (`ShadeHud/loot_filter.html`, `tools/game_data.html`): standalone and offline – no CDN, fonts or
+- **Browser pages** (`TQ2Tweaks/loot_filter.html`, `tools/game_data.html`): standalone and offline – no CDN, fonts or
   network calls; data comes from scripts the mod writes next to them (`affix_data.js`, `game_data.js`), shared code in
-  `ShadeHud/affix_parse.js`, `ShadeHud/page_style.css` and `ShadeHud/icons.js` (17 item type icons from game-icons.net,
+  `TQ2Tweaks/affix_parse.js`, `TQ2Tweaks/page_style.css` and `TQ2Tweaks/icons.js` (17 item type icons from game-icons.net,
   CC BY 3.0, downloaded once; only the motif path kept so it takes the text colour). The data page computes the chance per prefix/suffix roll by
   walking the item type's affix tables: at every level only entries whose tag requirement fits the item (type tag with
   its parents, build direction, chosen rarity) count, each with its weight among them. Tag requirement modes:
@@ -219,8 +219,8 @@ The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single p
 ## Tests
 
 ```sh
-luac5.4 -p ShadeHud/Scripts/*.lua
-lua5.4 tests/test_shadehud.lua
+luac5.4 -p TQ2Tweaks/Scripts/*.lua
+lua5.4 tests/test_tq2tweaks.lua
 ```
 
 Runs without the game against a mocked UE4SS API.
@@ -242,5 +242,5 @@ Steam → Titan Quest II → Properties → Launch options:
 WINEDLLOVERRIDES="dwmapi=n,b" %command%
 ```
 
-Logs: `TQ2/Binaries/Win64/UE4SS/UE4SS.log` (lines with `[ShadeHud]`) and the game log under
+Logs: `TQ2/Binaries/Win64/UE4SS/UE4SS.log` (lines with `[TQ2Tweaks]`) and the game log under
 `compatdata/1154030/pfx/drive_c/users/steamuser/AppData/Local/TQ2/Saved/Logs/` (crash causes; times are UTC).

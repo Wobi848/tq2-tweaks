@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 # Builds the GitHub Pages site in docs/ from the browser pages and the game data dumps:
 #   docs/index.html        data page (monsters & drops, item affixes), from tools/game_data.html
-#   docs/loot_filter.html  loot filter editor, from ShadeHud/loot_filter.html
+#   docs/loot_filter.html  loot filter editor, from TQ2Tweaks/loot_filter.html
 # Only game data goes online: the affix dump without the ground items and without the player's own loot filter,
 # the game data dump as it is. Run after a game patch (F9 and Shift+F9 in game), then commit docs/.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-mod="$root/ShadeHud"
+mod="$root/TQ2Tweaks"
 site="$root/docs"
 game_version="${1:?usage: tools/build_site.sh <game version, e.g. 0.7.1>}"
 
 for needed in "$mod/game_data.json" "$mod/affix_dump.txt"; do
-    [[ -f "$needed" ]] || { echo "Missing $needed: dump the game data first (see ShadeHud/README.md)." >&2; exit 1; }
+    [[ -f "$needed" ]] || { echo "Missing $needed: dump the game data first (see TQ2Tweaks/README.md)." >&2; exit 1; }
 done
 
 mkdir -p "$site"
 # Same pages, local paths flattened; data_info.js (game version) is loaded before the page scripts.
 add_info='s#<script src="\([^"]*\)affix_data.js"></script>#<script src="data_info.js"></script>\n&#'
-sed -e 's#\.\./ShadeHud/##g' -e "$add_info" "$root/tools/game_data.html" > "$site/index.html"
+sed -e 's#\.\./TQ2Tweaks/##g' -e "$add_info" "$root/tools/game_data.html" > "$site/index.html"
 sed -e 's#https://wobi848.github.io/tq2-tweaks/#index.html#g' -e 's#Game data (online)#Game data#' -e "$add_info" "$mod/loot_filter.html" > "$site/loot_filter.html"
 cp "$mod/affix_parse.js" "$mod/icons.js" "$mod/page_style.css" "$site/"
 

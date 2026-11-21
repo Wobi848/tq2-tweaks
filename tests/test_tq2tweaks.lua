@@ -1,11 +1,11 @@
--- Tests ShadeHud against a mocked UE4SS API (no game needed). Run from the project folder:
---   lua5.4 tests/test_shadehud.lua
+-- Tests TQ2Tweaks against a mocked UE4SS API (no game needed). Run from the project folder:
+--   lua5.4 tests/test_tq2tweaks.lua
 -- The scripts are copied to a temp folder so the real mod's user_settings.lua stays untouched.
 
 local projectDir = arg[0]:match("^(.*)/tests/") or "."
 local workDir = os.tmpname()
 os.remove(workDir)
-assert(os.execute(string.format("mkdir -p '%s' && cp -r '%s/ShadeHud/Scripts' '%s/'", workDir, projectDir, workDir)))
+assert(os.execute(string.format("mkdir -p '%s' && cp -r '%s/TQ2Tweaks/Scripts' '%s/'", workDir, projectDir, workDir)))
 package.path = workDir .. "/Scripts/?.lua;" .. package.path
 
 -- Mocked UE4SS API ----------------------------------------------------------------------------

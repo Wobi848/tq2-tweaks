@@ -144,7 +144,7 @@ function Settings.save(settings)
         settings.log("Could not save settings: " .. tostring(openError))
         return
     end
-    file:write("-- Saved by ShadeHud in game (F5 menu). Delete this file to reset to the values in config.lua.\n")
+    file:write("-- Saved by TQ2Tweaks in game (F5 menu). Delete this file to reset to the values in config.lua.\n")
     file:write("return {\n")
     for _, key in ipairs(EDITABLE_KEYS) do
         file:write(string.format("    %s = %s,\n", key, tostring(settings.values[key])))

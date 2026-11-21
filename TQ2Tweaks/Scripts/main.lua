@@ -1,4 +1,4 @@
--- TQ2 Tweaks (folder ShadeHud): shade display, XP/gold/loot tweaks, speed, level points, free crafting and a
+-- TQ2 Tweaks (folder TQ2Tweaks): shade display, XP/gold/loot tweaks, speed, level points, free crafting and a
 -- damage meter, all adjustable in the F5 menu. This file only wires the modules together.
 local config = require("config")
 local Settings = require("settings")
@@ -36,7 +36,7 @@ local LootRules = require("loot_rules")
 local LootFilterMenuEntries = require("loot_filter_menu_entries")
 local LoopTiming = require("loop_timing")
 
-local LOG_PREFIX = "[ShadeHud] "
+local LOG_PREFIX = "[TQ2Tweaks] "
 -- Sample values so the display can be adjusted in the menu without a Spirit character.
 local PREVIEW_SHADES = { current = 2, maximum = 3, progress = 0.5 }
 

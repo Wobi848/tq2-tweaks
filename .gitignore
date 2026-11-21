@@ -1,5 +1,5 @@
 # Per-player settings written by the mod in game (F5 menu)
-ShadeHud/user_settings.lua
+TQ2Tweaks/user_settings.lua
 
 # Logs and crash dumps, in case they get copied here for debugging
 *.log
@@ -11,10 +11,10 @@ KONZEPT.md
 .claude/
 
 # Written in game (affix dump, F9) and by the loot filter editor: per player, game version dependent
-ShadeHud/affix_dump.txt
-ShadeHud/affix_data.js
-ShadeHud/game_data.json
-ShadeHud/game_data.js
-ShadeHud/gear.json
-ShadeHud/mega_dump.jsonl
-ShadeHud/loot_filter.lua
+TQ2Tweaks/affix_dump.txt
+TQ2Tweaks/affix_data.js
+TQ2Tweaks/game_data.json
+TQ2Tweaks/game_data.js
+TQ2Tweaks/gear.json
+TQ2Tweaks/mega_dump.jsonl
+TQ2Tweaks/loot_filter.lua
