@@ -69,6 +69,7 @@
   <header>
     <h1>TQ2 Game Data</h1>
     <span class="status" id="status"></span>
+    <a class="page-link" href="../ShadeHud/loot_filter.html">Loot filter editor →</a>
   </header>
   <div class="tabs" role="tablist">
     <button id="tabMonsters" class="on" role="tab">Monsters &amp; drops</button>
@@ -109,6 +110,9 @@
     </div>
     <p class="note" id="affixNote"></p>
   </div>
+  <p class="credits" id="credits">Unofficial fan tool for Titan Quest II. Game data and names © THQ Nordic / Grimlore Games;
+  not affiliated with them. Icons: <a href="https://game-icons.net">game-icons.net</a> (CC BY 3.0).
+  <span id="dataInfo"></span></p>
 </main>
 
 <script src="../ShadeHud/game_data.js"></script>
@@ -476,6 +480,12 @@ if (GAME) {
 renderMonsterList();
 renderMonster();
 renderAffixes();
+// Game version of the data (written by tools/build_site.sh for the web version).
+if (window.TQ2_DATA_INFO) {
+  document.getElementById("dataInfo").textContent =
+    `Data: Titan Quest II ${window.TQ2_DATA_INFO.gameVersion}, built ${window.TQ2_DATA_INFO.built}.`;
+}
+
 </script>
 </body>
 </html>

@@ -4,6 +4,9 @@ UE4SS Lua mod for Titan Quest II (Early Access 0.7.1, Unreal Engine 5.7; develop
 The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single player only.**
 
 - Player guide (installation, keys, settings): [ShadeHud/README.md](ShadeHud/README.md)
+- Downloads: [releases](https://github.com/Wobi848/tq2-tweaks/releases); data pages online:
+  <https://wobi848.github.io/tq2-tweaks/> (built into `docs/` by `tools/build_site.sh <game version>` from the
+  dumps; only game data goes online – the ground items and the player's own loot filter are left out)
 - License: MIT, see [LICENSE](LICENSE)
 - The rest of this file is for developers: structure, decisions and why things are done the way they are.
 

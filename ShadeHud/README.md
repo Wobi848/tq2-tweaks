@@ -21,6 +21,12 @@ TQ2 Tweaks is a Lua mod and needs **UE4SS for TQ2** from Nexus Mods (not include
 Download the normal version, not the DEV version. The general UE4SS release from GitHub crashes TQ2
 (Unreal Engine 5.7) on start.
 
+## Download
+
+Get `tq2-tweaks-<version>.zip` from the [releases](https://github.com/Wobi848/tq2-tweaks/releases); it contains
+the folder `ShadeHud`. Online data pages (monsters & drops, item affixes, loot filter editor):
+<https://wobi848.github.io/tq2-tweaks/>
+
 ## Installation
 
 1. **Install UE4SS:** copy the content of the UE4SS zip (`dwmapi.dll` and the folder `UE4SS`) into this game

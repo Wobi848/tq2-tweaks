@@ -86,6 +86,7 @@
   <header>
     <h1>Loot Filter</h1>
     <span class="status" id="dataStatus"></span>
+    <a class="page-link" href="https://wobi848.github.io/tq2-tweaks/">Game data (online) →</a>
   </header>
 
   <div class="layout">
@@ -135,6 +136,9 @@
       </div>
     </section>
   </div>
+  <p class="credits" id="credits">Unofficial fan tool for Titan Quest II. Game data and names © THQ Nordic / Grimlore Games;
+  not affiliated with them. Icons: <a href="https://game-icons.net">game-icons.net</a> (CC BY 3.0).
+  <span id="dataInfo"></span></p>
 </main>
 
 <footer>
@@ -459,6 +463,11 @@ if (data) {
   status.classList.add("missing");
 }
 render();
+// Game version of the data (written by tools/build_site.sh for the web version).
+if (window.TQ2_DATA_INFO) {
+  document.getElementById("dataInfo").textContent =
+    `Data: Titan Quest II ${window.TQ2_DATA_INFO.gameVersion}, built ${window.TQ2_DATA_INFO.built}.`;
+}
 </script>
 </body>
 </html>
