@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TQ2 Game Data</title>
+<!-- TQ2 Tweaks data page: monsters with their drop tables, and which affixes each item type can roll with which chance.
+     Reads ../ShadeHud/game_data.js (game data dump, GameDataDump in config.lua) and ../ShadeHud/affix_data.js (F9).
+     Works offline, no libraries. -->
+<link rel="stylesheet" href="../ShadeHud/page_style.css">
+<style>
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tabs button { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 8px 16px;
+                 cursor: pointer; font-weight: 600; }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .side { position: sticky; top: 16px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+  @media (max-width: 820px) { .side { position: static; max-height: none; } }
+  .side .search { margin-bottom: 8px; }
+  .side label.toggle-row { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .entity-list { overflow: auto; display: flex; flex-direction: column; gap: 4px; min-height: 120px; }
+  .entity { text-align: left; border: 1px solid transparent; background: none; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .entity:hover { background: var(--raised); }
+  .entity.active { background: var(--accent-soft); border-color: var(--accent); }
+  .entity small { display: block; color: var(--muted); font-size: 12px; }
+  .count { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .detail-head h2 { font-size: 22px; text-transform: none; letter-spacing: 0; color: var(--text); margin: 0; }
+  .detail-head p { margin: 2px 0 0; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tag { font-size: 12px; padding: 2px 9px; border-radius: 99px; background: var(--chip); color: var(--muted); }
+  .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 16px; }
+  .fact { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .fact span { display: block; font-size: 12px; color: var(--muted); }
+  code, .formula { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .section-title { font-weight: 600; margin: 20px 0 8px; }
+  .drops { list-style: none; margin: 0; padding: 0; }
+  .drops .drops { margin-left: 18px; border-left: 2px solid var(--line); padding-left: 10px; }
+  .drop { padding: 6px 0; border-top: 1px solid var(--line); }
+  .drops > .drop:first-child { border-top: 0; }
+  .drop-row { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .share { min-width: 64px; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); }
+  .share.unknown { color: var(--muted); font-weight: 400; }
+  .drop details > summary { cursor: pointer; list-style: none; }
+  .drop details > summary::-webkit-details-marker { display: none; }
+  .drop details > summary .drop-row::before { content: "▸"; color: var(--muted); }
+  .drop details[open] > summary .drop-row::before { content: "▾"; }
+  .cond { font-size: 12px; color: var(--warn); }
+  .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+  .controls { display: grid; gap: 12px; }
+  .controls .label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .kind-groups { display: grid; gap: 6px; }
+  .kind-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .kind-group > span { width: 74px; font-size: 13px; color: var(--muted); }
+  table.affixes { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.affixes th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 6px 8px;
+                     border-bottom: 1px solid var(--line); }
+  table.affixes td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.affixes td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.affixes td small { display: block; color: var(--muted); }
+  .bar { height: 6px; background: var(--chip); border-radius: 3px; margin-top: 4px; min-width: 60px; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .two-cols > .card { margin-top: 0; }
+  @media (max-width: 1050px) { .two-cols { grid-template-columns: 1fr; } }
+  .empty { color: var(--muted); padding: 20px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>TQ2 Game Data</h1>
+    <span class="status" id="status"></span>
+  </header>
+  <div class="tabs" role="tablist">
+    <button id="tabMonsters" class="on" role="tab">Monsters &amp; drops</button>
+    <button id="tabAffixes" role="tab">Item affixes</button>
+  </div>
+
+  <div class="layout" id="monstersView">
+    <aside class="card side">
+      <input class="search" type="search" id="monsterSearch" placeholder="Search monsters: hydromancer, satyr, boss …">
+      <label class="toggle-row"><input type="checkbox" id="onlyDrops" checked> Only monsters with a drop list</label>
+      <div class="entity-list" id="monsterList"></div>
+      <div class="count" id="monsterCount"></div>
+    </aside>
+    <section class="card" id="monsterDetail"></section>
+  </div>
+
+  <div id="affixesView" hidden>
+    <div class="card controls">
+      <div>
+        <div class="label">Item kind</div>
+        <div class="kind-groups" id="kinds"></div>
+      </div>
+      <div class="two-cols">
+        <div>
+          <div class="label">Rarity</div>
+          <div class="segmented" id="rarity"></div>
+        </div>
+        <div>
+          <div class="label">Build direction (part of the item type)</div>
+          <div class="segmented" id="builds"></div>
+        </div>
+      </div>
+      <input class="search" type="search" id="affixSearch" placeholder="Filter affixes: summon, health, fire …">
+    </div>
+    <div class="two-cols" style="margin-top:18px">
+      <div class="card"><h2>Prefixes</h2><div id="prefixes"></div></div>
+      <div class="card"><h2>Suffixes</h2><div id="suffixes"></div></div>
+    </div>
+    <p class="note" id="affixNote"></p>
+  </div>
+</main>
+
+<script src="../ShadeHud/game_data.js"></script>
+<script src="../ShadeHud/affix_data.js"></script>
+<script src="../ShadeHud/affix_parse.js"></script>
+<script src="../ShadeHud/icons.js"></script>
+<script>
+"use strict";
+const GAME = window.TQ2_GAME_DATA;
+const AFFIX_DUMP = window.TQ2_TWEAKS_DATA;
+const affixInfo = new Map((AFFIX_DUMP ? parseDump(AFFIX_DUMP.dump) : []).map(affix => [affix.name, affix]));
+const RARITIES = ["Common", "Magic", "Rare", "Infrequent", "Epic", "Legendary"];
+const MODES = ["any of", "all of", "none of", "not all of", "always", "never"];
+const KIND_GROUPS = [
+  ["Armour", ["Helmet", "Shoulder", "Torso", "Arm", "Leg"]],
+  ["Jewellery", ["Ring", "Neck"]],
+  ["Weapons", ["Weapon.Staff2H", "Weapon.Talisman1H", "Weapon.Shield1H", "Weapon.Sword1H", "Weapon.Dagger1H", "Weapon.Axe1H",
+               "Weapon.Axe2H", "Weapon.Blunt1H", "Weapon.Blunt2H", "Weapon.Spear1H", "Weapon.Bow2H", "Weapon.Throwing1H"]],
+];
+const KIND_LABELS = { Neck: "Amulet", Torso: "Chest", Arm: "Arms", Leg: "Legs", Shoulder: "Shoulders" };
+// Icon (icons.js) per item kind: the kind's last part without hand count, e.g. "Weapon.Axe2H" -> "axe".
+const KIND_ICONS = { Helmet: "head", Torso: "torso", Talisman: "talisman" };
+function kindIcon(kind) {
+  const base = tail(kind).replace(/(1H|2H)$/, "");
+  return itemIcon(KIND_ICONS[base] || base.toLowerCase());
+}
+const TYPE_PREFIX = "GrimVentory.ItemType.";
+
+// ---- small helpers ----
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function tail(tag) { return tag.split(".").pop(); }
+function pretty(name) {
+  return name.replace(/^da_/, "").replace(/_/g, " ").replace(/\b(t\d)\b/i, m => m.toUpperCase());
+}
+// Drop list names without their technical prefixes: "da_droplist_charm_ichthian_fin" -> "Charm ichthian fin".
+function listLabel(name) {
+  const text = name.replace(/^da_/, "").replace(/^(droplist|drop|globallist)_/, "").replace(/_/g, " ").trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+function number(text) { return /^-?\d+(\.\d+)?$/.test(String(text ?? "").trim()) ? Number(text) : NaN; }
+function percent(value) {
+  if (!Number.isFinite(value)) return "?";
+  if (value >= 0.1) return (value * 100).toFixed(1) + " %";
+  return (value * 100).toPrecision(2) + " %";
+}
+function kindLabel(kind) { return KIND_LABELS[kind] || tail(kind).replace("Blunt", "Mace").replace(/(1H|2H)$/, " $1"); }
+function formula(text) { return element("span", "formula", text); }
+
+// A requirement as readable text, e.g. "none of: Epic, Legendary".
+function requirementText(requirement) {
+  if (!requirement) return "";
+  const parts = [];
+  const add = tags => { if (tags) parts.push(`${MODES[tags.mode] || "?"}: ${tags.tags.map(tail).join(", ")}`); };
+  if (requirement.tags) {
+    add(requirement.tags);
+    (requirement.tags.more || []).forEach(add);
+  }
+  if (requirement.custom && requirement.custom !== "true") parts.push("if " + requirement.custom);
+  const levelMin = number(requirement.itemLevelMin), levelMax = number(requirement.itemLevelMax);
+  if (levelMin > 0) parts.push("item level ≥ " + levelMin);
+  if (levelMax >= 0) parts.push("item level ≤ " + levelMax);
+  return parts.join(" · ");
+}
+
+// ---- monsters ----
+const creatures = GAME ? GAME.creatures.filter(creature => creature.name).map(creature => {
+  const tags = creature.tags || [];
+  const tier = (tags.find(tag => tag.startsWith("GrimCore.Character.Tier.")) || "").split(".").pop();
+  const familyTag = tags.find(tag => tag.startsWith("GrimArchetypes.Creature.Family.")) || "";
+  const family = familyTag.split(".").slice(3, 5).join(" ").replace(/_/g, " ");
+  return { ...creature, tier, family,
+           searchText: [creature.name, creature.title, creature.internalName, family].join(" ").toLowerCase() };
+}).sort((a, b) => a.name.localeCompare(b.name) || (a.tier || "").localeCompare(b.tier || ""))
+  // Variants of one monster with the same drops are one entry.
+  .filter((creature, index, all) => !all.slice(0, index).some(other => other.name === creature.name
+    && other.title === creature.title && other.tier === creature.tier && other.family === creature.family
+    && other.dropList === creature.dropList)) : [];
+let activeMonster = creatures.find(creature => creature.dropList) || null;
+
+function renderMonsterList() {
+  const query = document.getElementById("monsterSearch").value.trim().toLowerCase();
+  const onlyDrops = document.getElementById("onlyDrops").checked;
+  const shown = creatures.filter(creature => (!onlyDrops || creature.dropList) && (!query || creature.searchText.includes(query)));
+  const list = document.getElementById("monsterList");
+  list.replaceChildren();
+  for (const creature of shown.slice(0, 400)) {
+    const button = element("button", "entity" + (creature === activeMonster ? " active" : ""), creature.name);
+    button.append(element("small", "", [creature.title, creature.tier, creature.family].filter(Boolean).join(" · ")));
+    button.addEventListener("click", () => { activeMonster = creature; renderMonsterList(); renderMonster(); });
+    list.append(button);
+  }
+  document.getElementById("monsterCount").textContent = `${shown.length} of ${creatures.length} monsters`
+    + (shown.length > 400 ? " – search to see the rest" : "");
+}
+
+function fact(label, content) {
+  const box = element("div", "fact");
+  box.append(element("span", "", label), typeof content === "string" ? element("div", "", content) : content);
+  return box;
+}
+
+function rangeText(range) {
+  if (!range) return null;
+  return range.min === range.max ? range.min : `${range.min ?? "?"} – ${range.max ?? "?"}`;
+}
+
+// One drop list as a nested list; sub-lists open on click (they can be large and shared).
+function dropListView(name, path) {
+  const list = GAME.dropLists[name];
+  const wrapper = element("div");
+  if (!list) { wrapper.append(element("div", "note", "Unknown list " + name)); return wrapper; }
+  const facts = [];
+  const top = path.length === 1;
+  if (list.dropChance && (top || list.dropChance !== "100")) facts.push(["Drop chance", list.dropChance]);
+  if (list.randomDrops && (top || rangeText(list.randomDrops) !== "1 – 100")) facts.push(["Random drops", rangeText(list.randomDrops)]);
+  if (list.globalFilter) facts.push(["Global list: any item that matches", requirementText({ tags: list.globalFilter })]);
+  if (facts.length) {
+    const note = element("div", "note");
+    note.append(...facts.flatMap(([label, value], index) => [index ? " · " : "", label + ": ", formula(value)]));
+    wrapper.append(note);
+  }
+  const items = element("ul", "drops");
+  for (const drop of list.fixedDrops || []) items.append(dropEntryView(drop, NaN, path, "always"));
+  const entries = list.randomTable || [];
+  const weights = entries.map(entry => number(entry.weight));
+  const total = weights.every(Number.isFinite) ? weights.reduce((sum, weight) => sum + weight, 0) : NaN;
+  const order = entries.map((entry, index) => index).sort((a, b) => (weights[b] || 0) - (weights[a] || 0));
+  let never = 0;
+  for (const index of order) {
+    const share = weights[index] / total;
+    if (share === 0) { never++; continue; }
+    items.append(dropEntryView(entries[index], share, path));
+  }
+  if (never) items.append(element("li", "note", `${never} more with weight 0 (do not drop here).`));
+  if (!items.children.length) items.append(element("li", "note", "No entries."));
+  wrapper.append(items);
+  return wrapper;
+}
+
+function dropEntryView(entry, share, path, fixedLabel) {
+  const item = element("li", "drop");
+  const row = element("div", "drop-row");
+  const shareText = fixedLabel || (Number.isFinite(share) ? percent(share) : "varies");
+  const shareBox = element("span", "share" + (Number.isFinite(share) ? "" : " unknown"), shareText);
+  if (!Number.isFinite(share) && entry.weight) shareBox.title = "Weight is a game formula: " + entry.weight;
+  row.append(shareBox);
+  const name = entry.list ? listLabel(entry.list) : entry.item ? pretty(entry.item) : "?";
+  row.append(element(entry.list ? "strong" : "span", "", name));
+  if (!Number.isFinite(share) && entry.weight) row.append(formula(entry.weight));
+  if (entry.count) row.append(element("small", "note", "× " + rangeText(entry.count)));
+  if (entry.guaranteed) row.append(element("span", "tag", "guaranteed"));
+  const condition = requirementText(entry.requirement);
+  if (condition) row.append(element("span", "cond", condition));
+  if (entry.list && !path.includes(entry.list)) {
+    const details = element("details");
+    const summary = element("summary");
+    summary.append(row);
+    details.append(summary);
+    details.addEventListener("toggle", () => {
+      if (details.open && details.children.length === 1) details.append(dropListView(entry.list, [...path, entry.list]));
+    }, { once: false });
+    item.append(details);
+  } else {
+    item.append(row);
+  }
+  return item;
+}
+
+function renderMonster() {
+  const detail = document.getElementById("monsterDetail");
+  detail.replaceChildren();
+  const creature = activeMonster;
+  if (!creature) { detail.append(element("div", "empty", "Pick a monster on the left.")); return; }
+  const head = element("div", "detail-head");
+  head.append(element("h2", "", creature.name));
+  if (creature.title) head.append(element("p", "", creature.title));
+  const chips = element("div", "chips");
+  for (const tag of creature.tags || []) chips.append(element("span", "tag", tag.split(".").slice(-2).join(".")));
+  head.append(chips);
+  detail.append(head);
+  const list = creature.dropList ? GAME.dropLists[creature.dropList] : null;
+  const facts = element("div", "facts");
+  facts.append(fact("Drop chance", formula(creature.dropChance || list?.dropChance || "–")));
+  facts.append(fact("Items per kill", formula(rangeText(creature.dropCount) || rangeText(list?.randomDrops) || "–")));
+  facts.append(fact("Drop list", creature.dropList ? listLabel(creature.dropList) : "none"));
+  detail.append(facts);
+  detail.append(element("div", "section-title", "What it drops"));
+  if (creature.dropList) {
+    detail.append(dropListView(creature.dropList, [creature.dropList]));
+    detail.append(element("p", "note", "Percentages are the share within one table (by weight); click a bold entry to "
+      + "open it. “varies” means the weight is a game formula (shown next to it), e.g. depending on level or difficulty."));
+  } else {
+    detail.append(element("div", "empty", "No own drop list (drops nothing, or uses the game's global lists)."));
+  }
+}
+
+// ---- item affixes ----
+const itemTypes = GAME ? GAME.itemTypes.filter(type => type.type && type.type.startsWith(TYPE_PREFIX)
+  && type.randomAffixes && type.randomAffixes.length && !/debug|daves|march2023/i.test(type.name)) : [];
+const state = { kind: "Ring", rarity: "Rare", build: "" };
+
+// Item tags with all their parents, so a requirement on "…ItemType.Weapon" matches "…ItemType.Weapon.Staff2H".
+function withParents(tags) {
+  const result = new Set();
+  for (const tag of tags) {
+    const parts = tag.split(".");
+    for (let length = 1; length <= parts.length; length++) result.add(parts.slice(0, length).join("."));
+  }
+  return result;
+}
+
+function tagsPass(requirement, itemTags) {
+  if (!requirement) return true;
+  const check = ({ mode, tags }) => {
+    const hits = tags.map(tag => itemTags.has(tag));
+    return [hits.some(Boolean), hits.every(Boolean), !hits.some(Boolean), !hits.every(Boolean), true, false][mode] ?? true;
+  };
+  return check(requirement) && (requirement.more || []).every(check);
+}
+
+function passes(entry, itemTags) {
+  return tagsPass(entry.requirement && entry.requirement.tags, itemTags);
+}
+
+// Walks an affix table: at every level the chance of an entry is its weight among the entries the item may get.
+function roll(entries, chance, itemTags, result, path) {
+  const eligible = (entries || []).filter(entry => passes(entry, itemTags));
+  const weights = eligible.map(entry => number(entry.weight));
+  const total = weights.every(Number.isFinite) ? weights.reduce((sum, weight) => sum + weight, 0) : NaN;
+  eligible.forEach((entry, index) => {
+    const share = chance * weights[index] / total;
+    if (entry.affix) {
+      const known = result.get(entry.affix) || { name: entry.affix, chance: 0, weight: entry.weight, conditions: new Set() };
+      known.chance += share;
+      const condition = requirementText(entry.requirement);
+      if (condition) known.conditions.add(condition);
+      result.set(entry.affix, known);
+    } else if (entry.table && !path.includes(entry.table)) {
+      roll(GAME.affixTables[entry.table], share, itemTags, result, [...path, entry.table]);
+    }
+  });
+}
+
+// Item types of a kind, including sub-kinds such as "Weapon.Axe1H.Normal" for "Weapon.Axe1H".
+function ofKind(type, kind) {
+  return type.type === TYPE_PREFIX + kind || type.type.startsWith(TYPE_PREFIX + kind + ".");
+}
+
+function itemTypeFor(kind, build) {
+  const candidates = itemTypes.filter(type => ofKind(type, kind));
+  return candidates.find(type => (type.tags || []).includes("GrimVentory.ItemBuildDirection." + build)) || candidates[0];
+}
+
+function buildsOf(kind) {
+  const builds = new Set();
+  for (const type of itemTypes.filter(each => ofKind(each, kind))) {
+    for (const tag of type.tags || []) if (tag.startsWith("GrimVentory.ItemBuildDirection.")) builds.add(tail(tag));
+  }
+  return [...builds].sort();
+}
+
+function segmented(container, values, selected, onPick, label = value => value) {
+  container.replaceChildren();
+  for (const value of values) {
+    const button = element("button", value === selected ? "on" : "", label(value));
+    button.addEventListener("click", () => onPick(value));
+    container.append(button);
+  }
+}
+
+function affixTable(rows) {
+  const query = document.getElementById("affixSearch").value.trim().toLowerCase();
+  const shown = rows.filter(row => !query || row.searchText.includes(query));
+  if (!shown.length) return element("div", "empty", rows.length ? "Nothing matches." : "None.");
+  const table = element("table", "affixes");
+  const head = element("tr");
+  for (const title of ["Affix", "Chance per roll", "Weight"]) head.append(element("th", "", title));
+  table.append(head);
+  const best = Math.max(...shown.map(row => row.chance).filter(Number.isFinite), 0.0001);
+  for (const row of shown) {
+    const line = element("tr");
+    const name = element("td");
+    name.append(element("strong", "", row.label), element("small", "", row.effect));
+    if (row.conditions.size) name.append(element("small", "cond", [...row.conditions].join(" · ")));
+    const chance = element("td", "num", percent(row.chance));
+    const bar = element("div", "bar");
+    const fill = element("i");
+    fill.style.width = Number.isFinite(row.chance) ? Math.max(2, row.chance / best * 100) + "%" : "0";
+    bar.append(fill);
+    chance.append(bar);
+    line.append(name, chance, element("td", "num", row.weight ?? ""));
+    table.append(line);
+  }
+  return table;
+}
+
+function renderAffixes() {
+  const kinds = document.getElementById("kinds");
+  kinds.replaceChildren();
+  for (const [group, entries] of KIND_GROUPS) {
+    const row = element("div", "kind-group");
+    row.append(element("span", "", group));
+    for (const kind of entries.filter(each => itemTypes.some(type => ofKind(type, each)))) {
+      const chip = element("button", "chip" + (state.kind === kind ? " on" : ""));
+      chip.append(kindIcon(kind) || "", kindLabel(kind));
+      chip.addEventListener("click", () => { state.kind = kind; state.build = ""; renderAffixes(); });
+      row.append(chip);
+    }
+    kinds.append(row);
+  }
+  segmented(document.getElementById("rarity"), RARITIES, state.rarity, value => { state.rarity = value; renderAffixes(); });
+  const builds = buildsOf(state.kind);
+  if (!builds.includes(state.build)) state.build = builds[0] || "";
+  segmented(document.getElementById("builds"), builds.length ? builds : ["–"], state.build || "–",
+            value => { state.build = value; renderAffixes(); });
+
+  const type = itemTypeFor(state.kind, state.build);
+  const prefixes = document.getElementById("prefixes"), suffixes = document.getElementById("suffixes");
+  prefixes.replaceChildren(); suffixes.replaceChildren();
+  if (!type) { prefixes.append(element("div", "empty", "No item type found.")); return; }
+  const itemTags = withParents([type.type, ...(type.tags || []), "GrimVentory.ItemRarity." + state.rarity]);
+  for (const top of type.randomAffixes) {
+    const result = new Map();
+    if (passes(top, itemTags)) roll(top.table ? GAME.affixTables[top.table] : [top], 1, itemTags, result, [top.table]);
+    const rows = [...result.values()].map(entry => {
+      const info = affixInfo.get(entry.name);
+      const label = info ? info.label : entry.name;
+      const effect = info ? info.effect : "";
+      return { ...entry, label, effect, searchText: (label + " " + effect + " " + entry.name).toLowerCase() };
+    }).sort((a, b) => (b.chance || 0) - (a.chance || 0));
+    const target = /suffix/i.test(top.table || "") ? suffixes : prefixes;
+    target.append(affixTable(rows));
+  }
+  document.getElementById("affixNote").textContent = `Example item type: ${pretty(type.name)}. “Chance per roll” is the `
+    + "chance that one prefix (or suffix) roll gives this affix; how many prefixes and suffixes an item gets depends on "
+    + "its rarity, which is not part of this data. Conditions in yellow come from the game's tables.";
+}
+
+// ---- tabs and start ----
+function showTab(tab) {
+  document.getElementById("tabMonsters").classList.toggle("on", tab === "monsters");
+  document.getElementById("tabAffixes").classList.toggle("on", tab === "affixes");
+  document.getElementById("monstersView").hidden = tab !== "monsters";
+  document.getElementById("affixesView").hidden = tab !== "affixes";
+}
+document.getElementById("tabMonsters").addEventListener("click", () => showTab("monsters"));
+document.getElementById("tabAffixes").addEventListener("click", () => showTab("affixes"));
+document.getElementById("monsterSearch").addEventListener("input", renderMonsterList);
+document.getElementById("onlyDrops").addEventListener("change", renderMonsterList);
+document.getElementById("affixSearch").addEventListener("input", renderAffixes);
+
+const status = document.getElementById("status");
+if (GAME) {
+  status.textContent = `${creatures.length} monsters · ${Object.keys(GAME.dropLists).length} drop lists · `
+    + `${itemTypes.length} item types` + (AFFIX_DUMP ? "" : " · affix names missing (press F9 in game)");
+} else {
+  status.textContent = "No game data yet: set GameDataDump = true in config.lua, press Shift+F9 in game, then reload.";
+  status.classList.add("missing");
+}
+renderMonsterList();
+renderMonster();
+renderAffixes();
+</script>
+</body>
+</html>

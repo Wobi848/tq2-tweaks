@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loot Filter</title>
+<!-- TQ2 Tweaks loot filter editor: rules for equipment pickup. Opens with affix_data.js (written in game with F9) and
+     saves loot_filter.lua for the mod folder. Works offline, no libraries. -->
+<link rel="stylesheet" href="page_style.css">
+<style>
+  /* Rule list */
+  .rules { position: sticky; top: 16px; }
+  @media (max-width: 820px) { .rules { position: static; } }
+  .rule-list { display: flex; flex-direction: column; gap: 8px; }
+  .rule { text-align: left; border: 1px solid var(--line); background: var(--raised); border-radius: 10px;
+          padding: 10px 12px; cursor: pointer; }
+  .rule:hover { border-color: var(--accent); }
+  .rule.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+  .rule strong { display: block; }
+  .rule span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .add-rule { margin-top: 10px; width: 100%; border: 1px dashed var(--line); background: none; border-radius: 10px;
+              padding: 9px; cursor: pointer; color: var(--accent); font-weight: 600; }
+  .add-rule:hover { border-color: var(--accent); }
+  .hint { font-size: 13px; color: var(--muted); margin: 12px 0 0; }
+
+  /* Rule editor */
+  .editor-head { display: flex; gap: 12px; align-items: center; }
+  .name-input { flex: 1; min-width: 0; font-size: 20px; font-weight: 600; padding: 6px 10px; border-radius: 8px;
+                border: 1px solid transparent; background: var(--raised); }
+  .name-input:hover, .name-input:focus { border-color: var(--line); outline: none; }
+  .danger { border: 1px solid var(--danger); color: var(--danger); background: none; border-radius: 8px;
+            padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+  .danger:hover { background: var(--danger-soft); }
+  .danger:disabled { opacity: .4; cursor: default; background: none; }
+  .field { margin-top: 18px; }
+  .field-label { font-weight: 600; margin-bottom: 8px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .field-label small { font-weight: 400; color: var(--muted); }
+  .type-groups { display: grid; gap: 8px; }
+  .type-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .type-group > span { width: 74px; font-size: 13px; color: var(--muted); }
+  .needed select { padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); }
+  .picked { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px; }
+  .picked-item { display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 8px;
+                 padding: 6px 8px 6px 12px; background: var(--raised); }
+  .picked-item div { flex: 1; min-width: 0; }
+  .picked-item strong { font-size: 14px; }
+  .picked-item span { display: block; font-size: 12.5px; color: var(--muted); }
+  .remove { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1;
+            padding: 4px 8px; border-radius: 6px; }
+  .remove:hover { color: var(--danger); background: var(--danger-soft); }
+  .summary { margin-top: 18px; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 14px; }
+
+  /* Affix browser */
+  .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  ul.affixes { list-style: none; margin: 12px 0 0; padding: 0; }
+  ul.affixes li { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--line); }
+  ul.affixes li:first-child { border-top: 0; }
+  ul.affixes li > div { flex: 1; min-width: 0; }
+  .affix-title { font-weight: 600; }
+  .affix-title em { font-style: normal; font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 6px; }
+  .affix-effect { font-size: 14px; }
+  .affix-meta { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+  .affix-meta b { font-family: system-ui, sans-serif; font-weight: 600; color: var(--accent); margin-right: 8px; }
+  .toggle { border: 1px solid var(--accent); color: var(--accent); background: none; border-radius: 8px; padding: 6px 12px;
+            cursor: pointer; white-space: nowrap; min-width: 92px; }
+  .toggle:hover { background: var(--accent-soft); }
+  .toggle.on { background: var(--accent); color: var(--accent-text); }
+  .more { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  details.manual { margin-top: 18px; font-size: 14px; color: var(--muted); }
+  details.manual label { display: block; margin-top: 8px; }
+
+  /* Save bar */
+  footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); }
+  footer .inner { max-width: 1180px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px;
+                  align-items: center; justify-content: space-between; }
+  .save-state { font-size: 14px; }
+  .save-state.dirty { color: var(--warn); }
+  .save-state.clean { color: var(--ok); }
+  .save-state small { display: block; color: var(--muted); }
+  .primary { border: 0; background: var(--accent); color: var(--accent-text); border-radius: 10px; padding: 10px 18px;
+             font-weight: 600; cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Loot Filter</h1>
+    <span class="status" id="dataStatus"></span>
+  </header>
+
+  <div class="layout">
+    <aside class="rules card">
+      <h2>Rules</h2>
+      <div class="rule-list" id="ruleList"></div>
+      <button class="add-rule" id="addRule">+ New rule</button>
+      <p class="hint">An item is picked up if <strong>any</strong> rule matches. Within a rule, all conditions must hold.</p>
+    </aside>
+
+    <section>
+      <div class="card">
+        <div class="editor-head">
+          <input class="name-input" id="ruleName" aria-label="Rule name">
+          <button class="danger" id="deleteRule">Delete rule</button>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Rarity <small>this rarity or better</small></div>
+          <div class="segmented" id="rarity"></div>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Item types <small>none selected = all types</small></div>
+          <div class="type-groups" id="types"></div>
+        </div>
+
+        <div class="field">
+          <div class="field-label needed" id="neededLabel"></div>
+          <div class="picked" id="picked"></div>
+        </div>
+
+        <div class="summary" id="summary"></div>
+      </div>
+
+      <div class="card">
+        <h2>Add affixes to this rule</h2>
+        <input class="search" type="search" id="search" placeholder="Search: summon, health, barrier, Beastcaller …">
+        <div class="kinds" id="kinds"></div>
+        <ul class="affixes" id="affixList"></ul>
+        <div class="more" id="more"></div>
+        <details class="manual">
+          <summary>Load files by hand (only needed without affix_data.js)</summary>
+          <label>Affix list (affix_dump.txt): <input type="file" id="dumpFile" accept=".txt"></label>
+          <label>Loot filter (loot_filter.lua): <input type="file" id="filterFile" accept=".lua"></label>
+        </details>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="inner">
+    <div class="save-state" id="saveState"></div>
+    <button class="primary" id="save">Save loot_filter.lua</button>
+  </div>
+</footer>
+
+<!-- Written by the mod with F9: the affix list and the loot filter at that moment (a page may not read local files
+     itself, but it may load a script next to it). -->
+<script src="affix_data.js"></script>
+<script src="affix_parse.js"></script>
+<script src="icons.js"></script>
+<script>
+"use strict";
+const STORAGE_KEY = "tq2tweaks.lootFilter";
+const LOADED_FILTER_KEY = "tq2tweaks.lootFilterFromFile";
+const SAVED_TEXT_KEY = "tq2tweaks.lootFilterSaved";
+const LIST_LIMIT = 150;
+// Rarity names as in the mod's config (EquipmentRarityThresholds); "" = any rarity.
+const RARITIES = ["Common", "Magic", "Rare", "Infrequent", "Epic", "Legendary"];
+// Parts of the item type names (da_armor_head_..., da_jewelry_ring_..., da_weapon_2h_staff_...).
+const TYPE_GROUPS = [
+  ["Armour", [["head", "Helmet"], ["shoulder", "Shoulders"], ["torso", "Chest"], ["arm", "Arms"], ["leg", "Legs"], ["shield", "Shield"]]],
+  ["Jewellery", [["ring", "Ring"], ["neck", "Amulet"], ["talisman", "Talisman"]]],
+  ["Weapons", [["staff", "Staff"], ["sword", "Sword"], ["axe", "Axe"], ["blunt", "Mace"], ["spear", "Spear"], ["dagger", "Dagger"], ["bow", "Bow"]]],
+];
+const TYPE_LABELS = new Map(TYPE_GROUPS.flatMap(([, types]) => types));
+const KINDS = [["Prefix", "Prefixes", true], ["Suffix", "Suffixes", true], ["Unique", "Uniques", true], ["Base", "Base (implicit)", false]];
+
+let affixes = [];
+let byName = new Map();
+// Rules: { name, minRarity ("" = any), needed, types: Set, picked: Set of affix names }; the active one is edited.
+let rules = loadStored();
+let active = 0;
+const shownKinds = new Set(KINDS.filter(([, , on]) => on).map(([kind]) => kind));
+
+// ---- storage (per-browser convenience; the file is what counts) ----
+function storedText(key) { try { return localStorage.getItem(key); } catch (error) { return null; } }
+function rememberText(key, text) { try { localStorage.setItem(key, text); } catch (error) { /* convenience only */ } }
+
+function newRule(name) { return { name, minRarity: "Rare", needed: 1, types: new Set(), picked: new Set() }; }
+
+function loadStored() {
+  try {
+    const stored = JSON.parse(storedText(STORAGE_KEY) || "null");
+    if (Array.isArray(stored) && stored.length) {
+      return stored.map(rule => ({ ...rule, types: new Set(rule.types), picked: new Set(rule.picked) }));
+    }
+  } catch (error) { /* fall back to a fresh rule */ }
+  return [newRule("Rule 1")];
+}
+function store() {
+  rememberText(STORAGE_KEY, JSON.stringify(rules.map(rule => ({ ...rule, types: [...rule.types], picked: [...rule.picked] }))));
+}
+
+// ---- reading the dump and the filter file ----
+// Rules from a loot_filter.lua written by this page (one header line per rule, see filterText).
+function parseFilter(text) {
+  const quoted = part => [...part.matchAll(/"([^"]+)"/g)].map(match => match[1]);
+  const pattern = /\{ name = "([^"]*)", minRarity = (?:nil|"([^"]*)"), needed = (\d+), types = \{([^}]*)\}, affixes = \{([^}]*)\} \}/g;
+  return [...text.matchAll(pattern)].map(match => ({ name: match[1], minRarity: match[2] || "", needed: Number(match[3]),
+    types: new Set(quoted(match[4])), picked: new Set(quoted(match[5]).filter(name => name.startsWith("da_"))) }));
+}
+
+// The loot_filter.lua text for the rules: one header line per rule, so parseFilter can read it back.
+function filterText() {
+  const lines = ["-- Written by loot_filter.html: equipment is picked up if any rule matches; within a rule all conditions",
+                 "-- must hold (rarity from minRarity, one of the item types, `needed` of the listed affixes).", "return {"];
+  for (const each of rules) {
+    const rarity = each.minRarity ? `"${each.minRarity}"` : "nil";
+    const types = [...each.types].map(key => `"${key}"`).join(", ");
+    const header = `    { name = "${each.name}", minRarity = ${rarity}, needed = ${each.needed}, types = { ${types} }, affixes = {`;
+    if (!each.picked.size) { lines.push(header + "} },"); continue; }
+    lines.push(header);
+    for (const name of [...each.picked].sort()) {
+      const affix = byName.get(name);
+      const note = affix ? ` -- ${affix.label}: ${affix.effect}` : "";
+      lines.push(`        "${name}",${note.replace(/[\n{}]/g, " ")}`);
+    }
+    lines.push("    } },");
+  }
+  lines.push("}", "");
+  return lines.join("\n");
+}
+
+// ---- view helpers ----
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function rule() { return rules[active]; }
+function typeNames(each) { return [...each.types].map(key => TYPE_LABELS.get(key) || key).join(", "); }
+function neededOf(each) { return Math.min(each.needed, each.picked.size); }
+
+function describe(each) {
+  return [each.minRarity ? each.minRarity + "+" : "Any rarity",
+          each.types.size ? typeNames(each) : "all types",
+          each.picked.size ? `${neededOf(each)} of ${each.picked.size} affixes` : "no affix condition"].join(" · ");
+}
+
+function sentence(each) {
+  const rarity = each.minRarity ? `${each.minRarity} or better` : "any rarity";
+  const types = each.types.size ? typeNames(each) : "any item type";
+  if (!each.picked.size) return `Picks up every item of ${rarity} (${types}).`;
+  return `Picks up items of ${rarity} (${types}) that carry at least ${neededOf(each)} of the ${each.picked.size} affixes above.`;
+}
+
+// ---- rendering ----
+function renderRuleList() {
+  const list = document.getElementById("ruleList");
+  list.replaceChildren();
+  rules.forEach((each, index) => {
+    const button = element("button", "rule" + (index === active ? " active" : ""));
+    button.append(element("strong", "", each.name), element("span", "", describe(each)));
+    button.addEventListener("click", () => { active = index; render(); });
+    list.append(button);
+  });
+}
+
+function renderRarity() {
+  const rarity = document.getElementById("rarity");
+  rarity.replaceChildren();
+  for (const [value, label] of [["", "Any"], ...RARITIES.map(name => [name, name])]) {
+    const button = element("button", rule().minRarity === value ? "on" : "", label);
+    button.setAttribute("aria-pressed", String(rule().minRarity === value));
+    button.addEventListener("click", () => { rule().minRarity = value; changed(); });
+    rarity.append(button);
+  }
+}
+
+function renderTypes() {
+  const types = document.getElementById("types");
+  types.replaceChildren();
+  for (const [groupLabel, entries] of TYPE_GROUPS) {
+    const row = element("div", "type-group");
+    row.append(element("span", "", groupLabel));
+    for (const [key, label] of entries) {
+      const on = rule().types.has(key);
+      const chip = element("button", "chip" + (on ? " on" : ""));
+      chip.append(itemIcon(key) || "", label);
+      chip.setAttribute("aria-pressed", String(on));
+      chip.addEventListener("click", () => { on ? rule().types.delete(key) : rule().types.add(key); changed(); });
+      row.append(chip);
+    }
+    types.append(row);
+  }
+}
+
+function renderPicked() {
+  const label = document.getElementById("neededLabel");
+  label.replaceChildren();
+  if (rule().picked.size) {
+    const select = element("select");
+    const most = Math.min(4, rule().picked.size);
+    for (let count = 1; count <= most; count++) select.append(new Option(String(count), String(count)));
+    select.value = String(Math.min(rule().needed, most));
+    select.setAttribute("aria-label", "Affixes needed");
+    select.addEventListener("change", () => { rule().needed = Number(select.value); changed(); });
+    label.append("Affixes – the item needs at least ", select, ` of these ${rule().picked.size}`);
+  } else {
+    label.append("Affixes ", element("small", "", "none yet – add some below, or leave empty to decide by rarity and type only"));
+  }
+  const picked = document.getElementById("picked");
+  picked.replaceChildren();
+  const sorted = [...rule().picked].sort((a, b) => (byName.get(a)?.label || a).localeCompare(byName.get(b)?.label || b));
+  for (const name of sorted) {
+    const affix = byName.get(name);
+    const item = element("div", "picked-item");
+    const text = element("div");
+    text.append(element("strong", "", affix ? affix.label : name),
+                element("span", "", affix ? affix.effect : "not in the current affix list"));
+    const remove = element("button", "remove", "✕");
+    remove.title = "Remove from this rule";
+    remove.setAttribute("aria-label", "Remove " + (affix ? affix.label : name));
+    remove.addEventListener("click", () => { rule().picked.delete(name); changed(); });
+    item.append(text, remove);
+    picked.append(item);
+  }
+}
+
+function renderEditor() {
+  document.getElementById("ruleName").value = rule().name;
+  document.getElementById("deleteRule").disabled = rules.length === 1;
+  renderRarity();
+  renderTypes();
+  renderPicked();
+  document.getElementById("summary").textContent = sentence(rule());
+}
+
+function renderBrowser() {
+  const kinds = document.getElementById("kinds");
+  kinds.replaceChildren();
+  for (const [kind, label] of KINDS) {
+    const chip = element("button", "chip" + (shownKinds.has(kind) ? " on" : ""), label);
+    chip.setAttribute("aria-pressed", String(shownKinds.has(kind)));
+    chip.addEventListener("click", () => { shownKinds.has(kind) ? shownKinds.delete(kind) : shownKinds.add(kind); renderBrowser(); });
+    kinds.append(chip);
+  }
+  const query = document.getElementById("search").value.trim().toLowerCase();
+  const matching = affixes.filter(affix => shownKinds.has(affix.kind) && (!query || affix.searchText.includes(query)));
+  const list = document.getElementById("affixList");
+  list.replaceChildren();
+  for (const affix of matching.slice(0, LIST_LIMIT)) {
+    const inRule = rule().picked.has(affix.name);
+    const item = element("li");
+    const text = element("div");
+    const title = element("div", "affix-title", affix.label);
+    title.append(element("em", "", affix.kind));
+    const meta = element("div", "affix-meta");
+    const elsewhere = rules.filter(each => each !== rule() && each.picked.has(affix.name)).map(each => each.name);
+    if (affix.seen) meta.append(element("b", "", `${affix.seen}× on ground`));
+    if (elsewhere.length) meta.append(element("b", "", `also in ${elsewhere.join(", ")}`));
+    meta.append(affix.name);
+    text.append(title, element("div", "affix-effect", affix.effect), meta);
+    const toggle = element("button", "toggle" + (inRule ? " on" : ""), inRule ? "✓ Added" : "+ Add");
+    toggle.addEventListener("click", () => { inRule ? rule().picked.delete(affix.name) : rule().picked.add(affix.name); changed(); });
+    item.append(text, toggle);
+    list.append(item);
+  }
+  const more = document.getElementById("more");
+  if (!affixes.length) more.textContent = "No affix list yet: press F9 in game, then reload this page.";
+  else if (!matching.length) more.textContent = "Nothing matches.";
+  else if (matching.length > LIST_LIMIT) more.textContent = `Showing ${LIST_LIMIT} of ${matching.length} – search to narrow down.`;
+  else more.textContent = `${matching.length} affixes.`;
+}
+
+function renderSaveState() {
+  const state = document.getElementById("saveState");
+  state.replaceChildren();
+  if (filterText() === storedText(SAVED_TEXT_KEY)) {
+    state.className = "save-state clean";
+    state.append("✓ No unsaved changes");
+  } else {
+    state.className = "save-state dirty";
+    state.append("● Unsaved changes",
+      element("small", "", "Save, move the file into the ShadeHud folder, then in game switch “Loot filter” off and on."));
+  }
+}
+
+function render() {
+  renderRuleList();
+  renderEditor();
+  renderBrowser();
+  renderSaveState();
+}
+
+function changed() { store(); render(); }
+
+// ---- actions ----
+document.getElementById("addRule").addEventListener("click", () => {
+  rules.push(newRule("Rule " + (rules.length + 1)));
+  active = rules.length - 1;
+  changed();
+  document.getElementById("ruleName").select();
+});
+document.getElementById("ruleName").addEventListener("change", event => {
+  rule().name = event.target.value.replace(/["\\]/g, "").trim() || "Rule " + (active + 1);
+  changed();
+});
+document.getElementById("deleteRule").addEventListener("click", () => {
+  if (!confirm(`Delete the rule “${rule().name}”?`)) return;
+  rules.splice(active, 1);
+  active = Math.max(0, active - 1);
+  changed();
+});
+document.getElementById("search").addEventListener("input", renderBrowser);
+
+document.getElementById("save").addEventListener("click", () => {
+  const text = filterText();
+  const link = element("a");
+  link.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  link.download = "loot_filter.lua";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  rememberText(SAVED_TEXT_KEY, text);
+  renderSaveState();
+});
+
+function readFile(input, handle) {
+  input.addEventListener("change", () => {
+    const file = input.files[0];
+    if (file) file.text().then(handle);
+  });
+}
+function useAffixes(text) {
+  affixes = parseDump(text);
+  byName = new Map(affixes.map(affix => [affix.name, affix]));
+}
+function useFilter(text) {
+  const loaded = parseFilter(text);
+  if (!loaded.length) return;
+  rules = loaded;
+  active = 0;
+  rememberText(LOADED_FILTER_KEY, text);
+  store();
+  rememberText(SAVED_TEXT_KEY, filterText());
+}
+readFile(document.getElementById("dumpFile"), text => { useAffixes(text); render(); });
+readFile(document.getElementById("filterFile"), text => { useFilter(text); render(); });
+
+// ---- start: affixes and rules from affix_data.js. The rules from the file win when the file changed since the
+// last visit; otherwise the rules edited here stay, so unsaved edits survive a reload. ----
+const data = window.TQ2_TWEAKS_DATA;
+const status = document.getElementById("dataStatus");
+if (data) {
+  useAffixes(data.dump);
+  if (data.filter && storedText(LOADED_FILTER_KEY) !== data.filter) useFilter(data.filter);
+  if (data.filter && storedText(SAVED_TEXT_KEY) === null) {
+    // First visit with this version: the file in the mod folder is the saved state.
+    const edited = rules;
+    rules = parseFilter(data.filter);
+    rememberText(SAVED_TEXT_KEY, filterText());
+    rules = edited;
+  }
+  status.textContent = `${affixes.length} affixes · ${data.filter ? "your loot_filter.lua" : "no loot filter yet"} · from affix_data.js (F9 in game)`;
+} else {
+  status.textContent = "No affix_data.js yet – press F9 in game, then reload this page.";
+  status.classList.add("missing");
+}
+render();
+</script>
+</body>
+</html>

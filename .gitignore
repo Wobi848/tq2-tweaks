@@ -1,0 +1,19 @@
+# Per-player settings written by the mod in game (F5 menu)
+ShadeHud/user_settings.lua
+
+# Logs and crash dumps, in case they get copied here for debugging
+*.log
+*.dmp
+
+# Internal working notes (German): agent rules and planning, not part of the release
+CLAUDE.md
+KONZEPT.md
+.claude/
+
+# Written in game (affix dump, F9) and by the loot filter editor: per player, game version dependent
+ShadeHud/affix_dump.txt
+ShadeHud/affix_data.js
+ShadeHud/game_data.json
+ShadeHud/game_data.js
+ShadeHud/gear.json
+ShadeHud/loot_filter.lua
