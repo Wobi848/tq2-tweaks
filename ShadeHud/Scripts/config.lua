@@ -271,6 +271,8 @@ return {
     GameDataDumpModifier = "SHIFT",
     GameDataFile = "game_data.json",
     GameDataPageFile = "game_data.js",
+    -- With Ctrl (and GameDataDump): every data asset of the game, read generically, one JSON line each.
+    MegaDumpFile = "mega_dump.jsonl",
     -- The game's list of its data assets, relative to the game folder (TQ2).
     GameDataCacheFile = "CookedData/JsonMetaDataCache.json",
 }

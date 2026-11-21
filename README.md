@@ -31,6 +31,7 @@ The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single p
 | Damage detail window (F7) | `damage_detail_widget.lua` | yes |
 | Game data dump (Shift+F9): creatures, drop lists, affix tables | `game_data_dump.lua`, `json_text.lua` | yes (once) |
 | Gear dump (with F9): equipped items and own inventories with affix tiers and rolls | `gear_dump.lua` | yes |
+| Mega dump (Ctrl+F9, with `GameDataDump`): every data asset via reflection | `mega_dump.lua`, `batch_job.lua` | no |
 | Data page: monsters & drops, affix chances per item kind | `tools/game_data.html` | – |
 | Affix dump (F9) incl. charms/relics, and loot filter | `affix_dump.lua`, `loot_rules.lua`, `equipment_pickup.lua`, `ShadeHud/loot_filter.html` | yes |
 | Cleanup before a level change | `main.lua` (`RegisterLoadMapPreHook`), `player.lua` | no |

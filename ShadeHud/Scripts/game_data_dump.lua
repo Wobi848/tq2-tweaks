@@ -4,6 +4,7 @@
 -- (e.g. "0.05 * Level"). Only reads. Assets are loaded in small batches so the game keeps running.
 local DamageHook = require("damage_hook")
 local JsonText = require("json_text")
+local BatchJob = require("batch_job")
 
 local GameDataDump = {}
 
@@ -250,61 +251,29 @@ local function writeFile(path, content, log)
     return true
 end
 
-local function finish(job)
+local function finish(dump)
     for _, list in ipairs(FindAllOf(GLOBAL_DROP_LIST_CLASS) or {}) do
-        local name = describeDropList(list, job.data.dropLists)
+        local name = describeDropList(list, dump.data.dropLists)
         if name then
-            job.data.globalDropLists[#job.data.globalDropLists + 1] = name
+            dump.data.globalDropLists[#dump.data.globalDropLists + 1] = name
         end
     end
     for _, description in ipairs(FindAllOf(ITEM_DESCRIPTION_CLASS) or {}) do
         if usable(description) then
-            job.data.itemTypes[#job.data.itemTypes + 1] = GameDataDump.describeItemType(description, job.data.affixTables)
+            dump.data.itemTypes[#dump.data.itemTypes + 1] = GameDataDump.describeItemType(description, dump.data.affixTables)
         end
     end
     local dropListCount = 0
-    for _ in pairs(job.data.dropLists) do
+    for _ in pairs(dump.data.dropLists) do
         dropListCount = dropListCount + 1
     end
-    local json = JsonText.encode(job.data)
+    local json = JsonText.encode(dump.data)
     -- The same data as a script for tools/game_data.html (a page opened from disk may load a script, not a file).
-    if writeFile(job.outputPath, json .. "\n", job.log)
-        and writeFile(job.pagePath, "window.TQ2_GAME_DATA = " .. json .. ";\n", job.log) then
-        job.log(string.format("Game data written to %s: %d creatures (%d not loaded), %d drop lists, %d item types",
-            job.outputPath, #job.data.creatures, #job.data.notLoaded, dropListCount, #job.data.itemTypes))
+    if writeFile(dump.outputPath, json .. "\n", dump.log)
+        and writeFile(dump.pagePath, "window.TQ2_GAME_DATA = " .. json .. ";\n", dump.log) then
+        dump.log(string.format("Game data written to %s: %d creatures (%d not loaded), %d drop lists, %d item types",
+            dump.outputPath, #dump.data.creatures, #dump.data.notLoaded, dropListCount, #dump.data.itemTypes))
     end
-    job.running = false
-end
-
-local step
-
--- Runs one batch; an error ends the dump (logged) instead of leaving it marked as running.
-local function runStep(job)
-    local ok, err = pcall(step, job)
-    if not ok then
-        job.log("Game data dump error: " .. tostring(err))
-        job.running = false
-    end
-end
-
-step = function(job)
-    local last = math.min(job.next + BATCH_SIZE - 1, #job.paths)
-    for index = job.next, last do
-        local path = job.paths[index]
-        local ok, template = pcall(LoadAsset, GameDataDump.objectPath(path))
-        if ok and usable(template) then
-            local creature = GameDataDump.describeCreature(template, path, job.data.dropLists)
-            job.data.creatures[#job.data.creatures + 1] = creature
-        else
-            job.data.notLoaded[#job.data.notLoaded + 1] = path
-        end
-    end
-    job.next = last + 1
-    if job.next <= #job.paths then
-        ExecuteInGameThreadWithDelay(BATCH_DELAY_MS, function() runStep(job) end)
-        return
-    end
-    finish(job)
 end
 
 function GameDataDump.newState()
@@ -312,12 +281,11 @@ function GameDataDump.newState()
 end
 
 function GameDataDump.isRunning(state)
-    return state.job ~= nil and state.job.running
+    return BatchJob.isRunning(state.job)
 end
 
 -- Starts the dump: paths = { cache = JsonMetaDataCache.json, output = JSON file, page = script file for the data
--- page }. Returns false if it cannot
--- start (one already runs, or the cache file is missing). Call on the game thread.
+-- page }. Returns false if it cannot start (one already runs, or the cache file is missing). Call on the game thread.
 function GameDataDump.start(state, paths, log)
     if GameDataDump.isRunning(state) then
         log("Game data dump already running")
@@ -330,15 +298,25 @@ function GameDataDump.start(state, paths, log)
     end
     local cacheText = file:read("a")
     file:close()
-    local job = {
-        paths = GameDataDump.pathsOfClass(cacheText, CREATURE_CLASS), next = 1, outputPath = paths.output,
-        pagePath = paths.page, log = log,
+    local dump = {
+        outputPath = paths.output, pagePath = paths.page, log = log,
         data = { creatures = {}, notLoaded = {}, dropLists = {}, globalDropLists = {}, itemTypes = {}, affixTables = {} },
     }
-    job.running = true
-    state.job = job
-    log(string.format("Game data dump started: %d creature templates", #job.paths))
-    runStep(job)
+    local creaturePaths = GameDataDump.pathsOfClass(cacheText, CREATURE_CLASS)
+    log(string.format("Game data dump started: %d creature templates", #creaturePaths))
+    state.job = BatchJob.start(creaturePaths, {
+        name = "Game data dump", batchSize = BATCH_SIZE, delayMs = BATCH_DELAY_MS, log = log,
+        each = function(path)
+            local ok, template = pcall(LoadAsset, GameDataDump.objectPath(path))
+            if ok and usable(template) then
+                dump.data.creatures[#dump.data.creatures + 1] =
+                    GameDataDump.describeCreature(template, path, dump.data.dropLists)
+            else
+                dump.data.notLoaded[#dump.data.notLoaded + 1] = path
+            end
+        end,
+        finish = function() finish(dump) end,
+    })
     return true
 end
 

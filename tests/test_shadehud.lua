@@ -1205,6 +1205,66 @@ do
         and gearLog[1]:match("1 equipped, 1 in 1 inventories") ~= nil)
 end
 
+-- Mega dump: every asset of the game's asset list, read through reflection (inherited fields, structs, arrays,
+-- references by name), class defaults of referenced effects, maps skipped, assets that do not load listed.
+do
+    local MegaDump = require("mega_dump")
+    local function named(value) return { ToString = function() return value end } end
+    local function prop(name, kind, extra)
+        local property = { GetFName = function() return named(name) end,
+                           GetClass = function() return { GetFName = function() return named(kind) end } end }
+        for key, value in pairs(extra or {}) do property[key] = value end
+        return property
+    end
+    local function structType(properties, super)
+        return { IsValid = function() return true end, GetSuperStruct = function() return super end,
+                 ForEachProperty = function(_, callback) for _, property in ipairs(properties) do callback(property) end end }
+    end
+    local valid = function() return true end
+    local innerStruct = structType({ prop("A", "FloatProperty"),
+        prop("List", "ArrayProperty", { GetInner = function() return prop("", "IntProperty") end }) })
+    local effectDefaults = { IsValid = valid, GetAddress = function() return 900 end, Magnitude = 2.5,
+        GetClass = function() return structType({ prop("Magnitude", "FloatProperty") }) end }
+    local effectClass = { IsValid = valid, GetAddress = function() return 901 end,
+        GetFName = function() return named("bp_ge_summon_dmg_C") end,
+        GetFullName = function() return "BlueprintGeneratedClass /Game/Effects/bp_ge_summon_dmg.bp_ge_summon_dmg_C" end,
+        GetCDO = function() return effectDefaults end }
+    local texture = { IsValid = valid, GetFullName = function() return "Texture2D /Game/Icons/earth.earth" end,
+        GetOuter = function() return { GetAddress = function() return 1 end } end }
+    local baseClass = structType({ prop("Title", "TextProperty") })
+    local assetClass = structType({ prop("Count", "IntProperty"),
+        prop("Inner", "StructProperty", { GetStruct = function() return innerStruct end }),
+        prop("Icon", "ObjectProperty"), prop("Effect", "ClassProperty"), prop("Lookup", "MapProperty") }, baseClass)
+    local mastery = { IsValid = valid, GetAddress = function() return 700 end, GetClass = function() return assetClass end,
+        Title = named("Earth"), Count = 3, Inner = { A = 1.5, List = container({ 1, 2 }) }, Icon = texture,
+        Effect = effectClass, Lookup = {} }
+    local savedLoadAsset = LoadAsset
+    function LoadAsset(path)
+        if path == "/JsonData/TQ2/Masteries/da_mastery_earth.da_mastery_earth" then return mastery end
+        error("not found: " .. path)
+    end
+    local cachePath, outputPath = workDir .. "/mega_cache.json", workDir .. "/mega_dump.jsonl"
+    local cacheFile = io.open(cachePath, "w")
+    cacheFile:write('{ "pathsByClass": { "/Script/TQ2Gameplay.TQ2MasteryDescription": { "paths": [ '
+        .. '"/JsonData/TQ2/Masteries/da_mastery_earth", "/JsonData/TQ2/Masteries/da_missing" ] } } }')
+    cacheFile:close()
+    local megaLog = {}
+    MegaDump.start(MegaDump.newState(), { cache = cachePath, output = outputPath },
+        function(line) megaLog[#megaLog + 1] = line end)
+    LoadAsset = savedLoadAsset
+    local lines = {}
+    for line in io.lines(outputPath) do lines[#lines + 1] = line end
+    check("mega dump: asset read through reflection (inherited text, number, struct with array, reference by name)",
+        lines[1] ~= nil and lines[1]:find('"Count":3', 1, true) ~= nil and lines[1]:find('"Title":"Earth"', 1, true) ~= nil
+        and lines[1]:find('"Inner":{"A":1.5,"List":[1,2]}', 1, true) ~= nil
+        and lines[1]:find('"Icon":"/Game/Icons/earth.earth"', 1, true) ~= nil and lines[1]:find("Lookup", 1, true) == nil)
+    check("mega dump: assets that do not load are listed, referenced effect classes add their defaults",
+        lines[2] ~= nil and lines[2]:find('"notLoaded":true', 1, true) ~= nil
+        and lines[3] ~= nil and lines[3]:find('"classDefault":"/Game/Effects/bp_ge_summon_dmg.bp_ge_summon_dmg_C"', 1, true) ~= nil
+        and lines[3]:find('"Magnitude":2.5', 1, true) ~= nil
+        and megaLog[#megaLog]:match("1 assets %(1 not loaded%), 1 ability/effect classes") ~= nil)
+end
+
 -- Player lookup: the controller is searched once and kept while valid, searched again after forget().
 local Player = require("player")
 Player.forget()

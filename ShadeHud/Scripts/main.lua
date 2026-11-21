@@ -31,6 +31,7 @@ local CraftingAnywhere = require("crafting_anywhere")
 local AffixDump = require("affix_dump")
 local GameDataDump = require("game_data_dump")
 local GearDump = require("gear_dump")
+local MegaDump = require("mega_dump")
 local LootRules = require("loot_rules")
 local LootFilterMenuEntries = require("loot_filter_menu_entries")
 local LoopTiming = require("loop_timing")
@@ -518,6 +519,25 @@ if config.GameDataDump and affixDumpKey ~= nil and gameDataModifier ~= nil then
             local ok, err = pcall(GameDataDump.start, gameDataDump, paths, log)
             if not ok then
                 log("Game data dump error: " .. tostring(err))
+            end
+        end)
+    end)
+end
+
+-- Mega dump: Ctrl + the affix dump key, also only with GameDataDump (developer tool, loads every data asset).
+local megaDump = MegaDump.newState()
+if config.GameDataDump and affixDumpKey ~= nil then
+    RegisterKeyBind(affixDumpKey, { ModifierKey.CONTROL }, function()
+        ExecuteInGameThread(function()
+            local gameDir = Settings.modFilePath(""):match("^(.*)[/\\][Bb]inaries[/\\]")
+            if gameDir == nil then
+                log("Mega dump: game folder not found from the mod path")
+                return
+            end
+            local ok, err = pcall(MegaDump.start, megaDump, { cache = gameDir .. "/" .. config.GameDataCacheFile,
+                output = Settings.modFilePath(config.MegaDumpFile) }, log)
+            if not ok then
+                log("Mega dump error: " .. tostring(err))
             end
         end)
     end)
