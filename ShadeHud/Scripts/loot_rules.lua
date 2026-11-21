@@ -47,21 +47,17 @@ local function ruleOf(entry, rarityByName)
     if minRarity == nil and #types == 0 and affixCount == 0 then
         return nil, name .. ": no condition, it would pick up everything"
     end
-    return { name = name, minRarity = minRarity, types = types, craftable = entry.craftable == true,
+    return { name = name, minRarity = minRarity, rarityName = entry.minRarity, types = types,
+             craftable = entry.craftable == true, enabled = entry.enabled ~= false, affixCount = affixCount,
              affixes = affixCount > 0 and affixes or nil,
              needed = math.min(affixCount, math.max(1, math.floor(tonumber(entry.needed) or 1))) }
 end
 
--- Loads the rules from `path`; missing or broken files and unusable rules are logged and left out.
-function LootRules.load(path, rarityByName, log)
-    local file = io.open(path, "r")
-    if file == nil then
-        log("No loot filter yet (" .. path .. " missing): create it with loot_filter.html")
-        return {}
-    end
-    file:close()
+-- Rules from the text of a loot filter file; broken text and unusable rules are logged and left out. Rules switched
+-- off (enabled = false) are kept, so the menu can show them, but never match.
+function LootRules.fromText(text, rarityByName, log)
     -- Empty environment: the file is data only and may not call anything.
-    local chunk, loadError = loadfile(path, "t", {})
+    local chunk, loadError = load(text, "=loot_filter.lua", "t", {})
     if chunk == nil then
         log("Loot filter not loaded: " .. tostring(loadError))
         return {}
@@ -76,13 +72,25 @@ function LootRules.load(path, rarityByName, log)
         local rule, problem = ruleOf(entry, rarityByName)
         if rule then
             rules[#rules + 1] = rule
-            names[#names + 1] = rule.name
+            names[#names + 1] = rule.name .. (rule.enabled and "" or " (off)")
         else
             log("Loot filter rule left out: " .. problem)
         end
     end
     log(string.format("Loot filter: %d rule(s) %s", #rules, table.concat(names, ", ")))
     return rules
+end
+
+-- Reads `path` and returns its rules (see fromText); a missing file gives no rules.
+function LootRules.load(path, rarityByName, log)
+    local file = io.open(path, "r")
+    if file == nil then
+        log("No loot filter yet (" .. path .. " missing): create it with loot_filter.html")
+        return {}
+    end
+    local text = file:read("a")
+    file:close()
+    return LootRules.fromText(text, rarityByName, log)
 end
 
 local function typeMatches(rule, typeName)
@@ -179,7 +187,8 @@ end
 -- affixes fits by rarity and type (reading the affixes of a game item is the expensive and touchy part).
 function LootRules.matchesAny(rules, item)
     local function fits(rule)
-        return (rule.minRarity == nil or item.rarity >= rule.minRarity) and typeMatches(rule, item.typeName)
+        return rule.enabled and (rule.minRarity == nil or item.rarity >= rule.minRarity)
+            and typeMatches(rule, item.typeName)
     end
     for _, rule in ipairs(rules) do
         if rule.affixes == nil and fits(rule) then
@@ -199,6 +208,36 @@ function LootRules.matchesAny(rules, item)
         end
     end
     return false
+end
+
+local function escapePattern(text)
+    return (text:gsub("%p", "%%%0"))
+end
+
+-- The loot filter text with the header line of rule `name` changed: changes = { minRarity = "Rare" or false (any),
+-- needed = n, enabled = true/false }. Works on the one-line rule headers loot_filter.html writes. Returns the new text,
+-- or nil if the rule's header line is not found.
+function LootRules.editRule(text, name, changes)
+    local lineStart = text:find('\n[ \t]*{ name = "' .. escapePattern(name) .. '",')
+    if lineStart == nil then
+        return nil
+    end
+    local lineEnd = text:find("\n", lineStart + 1) or (#text + 1)
+    local line = text:sub(lineStart, lineEnd - 1)
+    if changes.minRarity ~= nil then
+        local value = changes.minRarity and ('"' .. changes.minRarity .. '"') or "nil"
+        line = line:gsub('minRarity = [^,]+,', function() return "minRarity = " .. value .. "," end, 1)
+    end
+    if changes.needed ~= nil then
+        line = line:gsub("needed = %d+,", "needed = " .. changes.needed .. ",", 1)
+    end
+    if changes.enabled ~= nil then
+        line = line:gsub(" enabled = false,", "", 1)
+        if changes.enabled == false then
+            line = line:gsub(" types = ", " enabled = false, types = ", 1)
+        end
+    end
+    return text:sub(1, lineStart - 1) .. line .. text:sub(lineEnd)
 end
 
 return LootRules

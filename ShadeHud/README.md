@@ -103,7 +103,11 @@ prefix or suffix – to replace). **Presets** (Summoner, Survivability, Epic and
    `loot_filter.lua`. Add rules, set rarity, item types and the number of affixes needed, and add affixes – each row
    shows the names the affix gives an item (e.g. "Beastcaller's … Wraithlord's") and its effect.
 3. Click **Save loot_filter.lua** and put the file into the `ShadeHud` folder.
-4. In the F5 menu (Items) switch **Loot filter** on (after a new file switch it off and on again).
+4. In the F5 menu (Items) switch **Loot filter** on. The mod notices a new or changed `loot_filter.lua` by itself
+   within a few seconds.
+
+In game, the F5 tab **Filter** lists your rules: switch each one on or off and change its rarity and how many affixes
+it needs. The changes are written into `loot_filter.lua` (and shown by the editor after the next F9).
 
 For developers: with `GameDataDump = true` in `config.lua`, **Shift+F9** writes `ShadeHud\game_data.json` (all
 creatures with their drop lists, and which affixes each item type can roll). It loads every creature template of the

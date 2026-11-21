@@ -53,6 +53,16 @@ local function bindNavigation(menu)
     RegisterKeyBind(Key.PAGE_UP, onlyWhileOpen(menu, function() switchTab(menu, -1) end))
 end
 
+-- Keeps the selection on a valid row after the active tab's entries were refilled (e.g. the loot filter rules).
+function Menu.entriesChanged(menu)
+    if menu.selected > #menu.entries then
+        menu.selected = #menu.entries
+    end
+    if menu.entries[menu.selected].header then
+        moveSelection(menu, 1)
+    end
+end
+
 -- Registers the keys. tabs: list of { name, entries } (see menu_tabs.lua). onClose is called when the menu closes
 -- (e.g. to save).
 function Menu.register(editKeyName, tabs, onClose, log)

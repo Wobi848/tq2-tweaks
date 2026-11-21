@@ -529,6 +529,37 @@ check("up at the start jumps to the tab's last row", menuLines():match("> Loot f
 press("PAGE_DOWN")
 press("PAGE_DOWN")
 tick()
+check("Filter tab: info row when there is no loot filter file", menuLines():match("%[ Filter %]") ~= nil
+    and menuLines():match("> Rules in loot_filter.lua|<  no file yet  >") ~= nil)
+do
+    local filterFile = io.open(workDir .. "/loot_filter.lua", "w")
+    filterFile:write('return {\n    { name = "Helmet", minRarity = "Magic", needed = 2, types = { "head" }, affixes = {\n'
+        .. '        "da_suffix_1_Health", "da_suffix_1_EnergyBarrier", "da_prefix_1_PerFireRes",\n    } },\n}\n')
+    filterFile:close()
+    tick() -- the check loop reads the file and refills the tab
+    tick() -- the display loop rebuilds the panel
+    check("Filter tab: rows per rule after the file appeared (on/off, rarity, affixes needed)",
+        menuLines():match("Helmet|<  On  >") ~= nil and menuLines():match("rarity from|<  Magic  >") ~= nil
+        and menuLines():match("affixes needed|<  2 of 3  >") ~= nil)
+    press("DOWN_ARROW") -- Helmet on/off
+    press("RIGHT_ARROW")
+    press("DOWN_ARROW") -- rarity from
+    press("RIGHT_ARROW")
+    press("DOWN_ARROW") -- affixes needed
+    press("RIGHT_ARROW")
+    tick() -- edits written and the file read again
+    tick()
+    local edited = io.open(workDir .. "/loot_filter.lua", "r")
+    local editedText = edited:read("a")
+    edited:close()
+    check("Filter tab: changes are written into loot_filter.lua and shown after the reload",
+        editedText:find('{ name = "Helmet", minRarity = "Rare", needed = 3, enabled = false, types = { "head" }', 1, true) ~= nil
+        and menuLines():match("Helmet|<  Off  >") ~= nil)
+    os.remove(workDir .. "/loot_filter.lua")
+    tick()
+end
+press("PAGE_DOWN")
+tick()
 check("Page Down after the last tab: the first one again", menuLines():match("%[ Shades %]")
     and menuLines():match("> Bar colour") ~= nil)
 
@@ -968,6 +999,25 @@ do
         { name = SUMMON_DAMAGE, random = false }, { name = SPEED, random = false }, { name = FIRE_DMG, random = false } } }
     check("crafting: fixed (non-random) affixes of uniques are not replaceable",
         not LootRules.matchesAny({ craftRules[1] }, unique))
+end
+do
+    local text = table.concat({
+        "return {",
+        '    { name = "Helmet", minRarity = "Magic", needed = 3, craftable = true, types = { "head" }, affixes = {',
+        '        "' .. HEALTH .. '", "' .. BARRIER .. '", "' .. FIRE .. '",',
+        "    } },",
+        '    { name = "Epic and better", minRarity = "Epic", needed = 1, types = {  }, affixes = {} },',
+        "}", "" }, "\n")
+    local edited = LootRules.editRule(text, "Helmet", { minRarity = "Rare", needed = 2, enabled = false })
+    local editedRules = LootRules.fromText(edited, RARITY, logFilter)
+    check("menu edit: rarity, count and on/off written into the rule's header line",
+        edited:find('{ name = "Helmet", minRarity = "Rare", needed = 2, craftable = true, enabled = false, types = { "head" }', 1, true) ~= nil
+        and #editedRules == 2 and editedRules[1].enabled == false and editedRules[1].needed == 2 and editedRules[2].enabled)
+    check("a rule switched off never matches",
+        not LootRules.matchesAny({ editedRules[1] }, { rarity = 5, typeName = "da_armor_head_x", affixNames = { HEALTH, BARRIER, FIRE } }))
+    local back = LootRules.editRule(edited, "Helmet", { minRarity = false, enabled = true })
+    check("menu edit: any rarity and on again", back:find('{ name = "Helmet", minRarity = nil, needed = 2, craftable = true, types =', 1, true) ~= nil)
+    check("menu edit: unknown rule gives nil", LootRules.editRule(text, "Nope", { needed = 1 }) == nil)
 end
 check("type parts match whole parts of the type name (arm is not armor)",
     LootRules.matchesAny(armRules, { rarity = 0, typeName = "da_armor_arm_greek_paladin", affixNames = {} })

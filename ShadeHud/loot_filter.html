@@ -15,6 +15,7 @@
   .rule { text-align: left; border: 1px solid var(--line); background: var(--raised); border-radius: 10px;
           padding: 10px 12px; cursor: pointer; }
   .rule:hover { border-color: var(--accent); }
+  .rule.off { opacity: .55; }
   .rule.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
   .rule strong { display: block; }
   .rule span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
@@ -108,6 +109,7 @@
       <div class="card">
         <div class="editor-head">
           <input class="name-input" id="ruleName" aria-label="Rule name">
+          <label class="chip" id="ruleOnLabel"><input type="checkbox" id="ruleOn"> Active</label>
           <button class="danger" id="deleteRule">Delete rule</button>
         </div>
 
@@ -223,7 +225,9 @@ const PRESETS = [
 function storedText(key) { try { return localStorage.getItem(key); } catch (error) { return null; } }
 function rememberText(key, text) { try { localStorage.setItem(key, text); } catch (error) { /* convenience only */ } }
 
-function newRule(name) { return { name, minRarity: "Rare", needed: 1, craftable: false, types: new Set(), picked: new Set() }; }
+function newRule(name) {
+  return { name, minRarity: "Rare", needed: 1, craftable: false, enabled: true, types: new Set(), picked: new Set() };
+}
 
 function loadStored() {
   try {
@@ -242,10 +246,10 @@ function store() {
 // Rules from a loot_filter.lua written by this page (one header line per rule, see filterText).
 function parseFilter(text) {
   const quoted = part => [...part.matchAll(/"([^"]+)"/g)].map(match => match[1]);
-  const pattern = /\{ name = "([^"]*)", minRarity = (?:nil|"([^"]*)"), needed = (\d+),( craftable = true,)? types = \{([^}]*)\}, affixes = \{([^}]*)\} \}/g;
+  const pattern = /\{ name = "([^"]*)", minRarity = (?:nil|"([^"]*)"), needed = (\d+),( craftable = true,)?( enabled = false,)? types = \{([^}]*)\}, affixes = \{([^}]*)\} \}/g;
   return [...text.matchAll(pattern)].map(match => ({ name: match[1], minRarity: match[2] || "", needed: Number(match[3]),
-    craftable: Boolean(match[4]), types: new Set(quoted(match[5])),
-    picked: new Set(quoted(match[6]).filter(name => name.startsWith("da_"))) }));
+    craftable: Boolean(match[4]), enabled: !match[5], types: new Set(quoted(match[6])),
+    picked: new Set(quoted(match[7]).filter(name => name.startsWith("da_"))) }));
 }
 
 // The loot_filter.lua text for the rules: one header line per rule, so parseFilter can read it back.
@@ -256,7 +260,8 @@ function filterText() {
     const rarity = each.minRarity ? `"${each.minRarity}"` : "nil";
     const types = [...each.types].map(key => `"${key}"`).join(", ");
     const craft = each.craftable && each.picked.size ? " craftable = true," : "";
-    const header = `    { name = "${each.name}", minRarity = ${rarity}, needed = ${each.needed},${craft} types = { ${types} }, affixes = {`;
+    const off = each.enabled === false ? " enabled = false," : "";
+    const header = `    { name = "${each.name}", minRarity = ${rarity}, needed = ${each.needed},${craft}${off} types = { ${types} }, affixes = {`;
     if (!each.picked.size) { lines.push(header + "} },"); continue; }
     lines.push(header);
     for (const name of [...each.picked].sort()) {
@@ -301,8 +306,8 @@ function renderRuleList() {
   const list = document.getElementById("ruleList");
   list.replaceChildren();
   rules.forEach((each, index) => {
-    const button = element("button", "rule" + (index === active ? " active" : ""));
-    button.append(element("strong", "", each.name), element("span", "", describe(each)));
+    const button = element("button", "rule" + (index === active ? " active" : "") + (each.enabled === false ? " off" : ""));
+    button.append(element("strong", "", each.name + (each.enabled === false ? " (off)" : "")), element("span", "", describe(each)));
     button.addEventListener("click", () => { active = index; render(); });
     list.append(button);
   });
@@ -373,6 +378,7 @@ function renderPicked() {
 
 function renderEditor() {
   document.getElementById("ruleName").value = rule().name;
+  document.getElementById("ruleOn").checked = rule().enabled !== false;
   document.getElementById("deleteRule").disabled = rules.length === 1;
   renderRarity();
   renderTypes();
@@ -474,6 +480,7 @@ document.getElementById("deleteRule").addEventListener("click", () => {
 });
 document.getElementById("search").addEventListener("input", renderBrowser);
 document.getElementById("craftable").addEventListener("change", event => { rule().craftable = event.target.checked; changed(); });
+document.getElementById("ruleOn").addEventListener("change", event => { rule().enabled = event.target.checked; changed(); });
 
 document.getElementById("save").addEventListener("click", () => {
   const text = filterText();

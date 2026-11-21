@@ -139,6 +139,8 @@ return {
     -- folder) is picked up, in addition to the rarity rule above.
     LootFilter = 1,
     LootFilterFile = "loot_filter.lua",
+    -- How often the mod looks whether loot_filter.lua changed (saved from the browser page) and reads it again.
+    LootFilterCheckMs = 2000,
     -- How many random affixes an item of a rarity can have (for loot rules that count crafting): Magic 3, Rare 4,
     -- Infrequent 4. Epic and better are uniques with fixed affixes.
     AffixPlacesByRarity = { [1] = 3, [2] = 4, [3] = 4 },
@@ -234,6 +236,7 @@ return {
         { Name = "Gameplay", Sections = { "Rewards", "Speed", "Points per level" } },
         { Name = "Items", Sections = { "Crafting", "Auto-Pickup" } },
         { Name = "Damage", Sections = { "Damage meter" } },
+        { Name = "Filter", Sections = { "Loot filter rules" } },
     },
     -- The menu is centred on the screen; MenuOffsetY moves it.
     MenuOffsetY = 0,

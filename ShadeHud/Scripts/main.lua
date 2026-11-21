@@ -32,6 +32,7 @@ local AffixDump = require("affix_dump")
 local GameDataDump = require("game_data_dump")
 local GearDump = require("gear_dump")
 local LootRules = require("loot_rules")
+local LootFilterMenuEntries = require("loot_filter_menu_entries")
 local LoopTiming = require("loop_timing")
 
 local LOG_PREFIX = "[ShadeHud] "
@@ -63,7 +64,14 @@ local function concat(first, second)
 end
 
 local settings = Settings.new(config, log)
-local menuEntries = concat(ShadeMenuEntries.create(settings), GameplayMenuEntries.create(settings))
+-- Loot filter state (see checkLootFilter): rules of loot_filter.lua, its last text, and edits queued by the F5 tab.
+local lootFilter = { rules = {}, text = nil, edits = {} }
+local function describeLootFilter()
+    return lootFilter.text and (#lootFilter.rules .. " rules") or "no file yet"
+end
+
+local menuEntries = concat(concat(ShadeMenuEntries.create(settings), GameplayMenuEntries.create(settings)),
+    LootFilterMenuEntries.section(describeLootFilter))
 local menuTabs = MenuTabs.build(menuEntries, config.MenuTabs)
 local menu = Menu.register(config.EditKey, menuTabs, function() Settings.save(settings) end, log)
 local shownRevision = settings.revision
@@ -183,16 +191,88 @@ for _, threshold in ipairs(config.EquipmentRarityThresholds) do
     end
 end
 
--- Loot filter rules, read again on every settings change while the filter is on (so a new loot_filter.lua is taken
--- over by switching the row off and on).
-local lootFilter = { rules = nil, revision = nil }
+-- Loot filter rules: loot_filter.lua is checked every LootFilterCheckMs and read again when it changed (saved from the
+-- browser page, or edited in the F5 tab "Filter"). The tab's changes are queued by the key callbacks and written into
+-- the file here, on the game thread, together with the editor's data file.
+local lootFilterPath = Settings.modFilePath(config.LootFilterFile)
+local filterEntries = nil
+for _, tab in ipairs(menuTabs) do
+    if tab.entries[1] and tab.entries[1].header == LootFilterMenuEntries.HEADER then
+        filterEntries = tab.entries
+    end
+end
+
+local function readText(path)
+    local file = io.open(path, "r")
+    if file == nil then
+        return nil
+    end
+    local text = file:read("a")
+    file:close()
+    return text
+end
+
+local function writeText(path, text)
+    local file, openError = io.open(path, "w")
+    if file == nil then
+        log("Not written: " .. path .. " (" .. tostring(openError) .. ")")
+        return false
+    end
+    file:write(text)
+    file:close()
+    return true
+end
+
+local function queueFilterEdit(name, changes)
+    lootFilter.edits[#lootFilter.edits + 1] = { name = name, changes = changes }
+end
+
+local function applyFilterEdits(text)
+    for _, edit in ipairs(lootFilter.edits) do
+        local edited = LootRules.editRule(text, edit.name, edit.changes)
+        if edited then
+            text = edited
+        else
+            log("Loot filter: rule '" .. edit.name .. "' not found in the file")
+        end
+    end
+    lootFilter.edits = {}
+    return text
+end
+
+local logMissingFilter = dedupedLogger()
+local function checkLootFilter()
+    local text = readText(lootFilterPath)
+    if text and #lootFilter.edits > 0 then
+        local edited = applyFilterEdits(text)
+        if edited ~= text and writeText(lootFilterPath, edited) then
+            text = edited
+            local dump = readText(Settings.modFilePath(config.AffixDumpFile))
+            if dump then
+                writeText(Settings.modFilePath(config.AffixPageDataFile), AffixDump.pageData(dump, text))
+            end
+        end
+    end
+    if text == nil then
+        logMissingFilter("No loot filter yet (" .. lootFilterPath .. " missing): create it with loot_filter.html")
+    end
+    if text == lootFilter.text then
+        return
+    end
+    lootFilter.text = text
+    lootFilter.rules = text and LootRules.fromText(text, rarityByName, log) or {}
+    if filterEntries then
+        LootFilterMenuEntries.fill(filterEntries, lootFilter.rules, queueFilterEdit)
+        if menu.entries == filterEntries then
+            Menu.entriesChanged(menu)
+            MenuWidget.reset()
+        end
+    end
+end
+
 local function lootRules()
     if not lootFilterOn() then
         return nil
-    end
-    if lootFilter.revision ~= settings.revision then
-        lootFilter.rules = LootRules.load(Settings.modFilePath(config.LootFilterFile), rarityByName, log)
-        lootFilter.revision = settings.revision
     end
     return lootFilter.rules
 end
@@ -273,6 +353,7 @@ everyMs(config.GameplayIntervalMs, "Level points", applyLevelPoints)
 everyMs(config.SpeedIntervalMs, "Speed", applySpeeds)
 everyMs(config.ItemTypeScanIntervalMs, "Auto pickup", applyAutoPickup)
 everyMs(config.EquipmentPickupIntervalMs, "Equipment pickup", applyEquipmentPickup)
+everyMs(config.LootFilterCheckMs, "Loot filter", checkLootFilter)
 
 -- Hooks are registered only once their feature is switched on, so a feature that is off does not touch the game
 -- at all (this keeps "off" a clean baseline when hunting crashes). Once registered they stay registered and read

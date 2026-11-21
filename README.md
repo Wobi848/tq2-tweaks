@@ -135,7 +135,10 @@ The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single p
   (dump + current filter as JavaScript strings), so the editor opens filled in. Rules from that file replace the ones
   kept in the browser only when the file changed since the last visit.
   The file is loaded with an empty environment (data only), rules without a condition or with an unknown rarity are
-  left out and logged; it is read again on every settings change while the filter is on. Item types are parts of
+  left out and logged. `main.lua` reads it every `LootFilterCheckMs` and reloads it when the text changed. The F5 tab
+  "Filter" (`loot_filter_menu_entries.lua`, rows refilled on every reload) edits a rule's on/off, rarity and count;
+  key callbacks only queue the edit, the loop writes it into the rule's one-line header (`LootRules.editRule`) and
+  refreshes `affix_data.js`. Item types are parts of
   the type name (`da_armor_head_…`, `da_jewelry_neck_…`, `da_weapon_2h_staff_…`).
 - **Game data dump** (groundwork for a data page: who drops what, with which chance): the data assets are cooked
   into the IoStore container (`TQ2-Windows.utoc/.ucas`), not the `.pak` (checked with repak: only config, images,
