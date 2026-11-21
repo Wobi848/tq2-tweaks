@@ -233,7 +233,7 @@ local function applyEquipmentPickup()
         return
     end
     local range = EquipmentPickup.hooverRange(equipmentState, character, config.EquipmentPickupFallbackRange)
-    local rule = { minRarity = equipmentThreshold(), lootRules = lootRules() }
+    local rule = { minRarity = equipmentThreshold(), lootRules = lootRules(), affixPlaces = config.AffixPlacesByRarity }
     local pickedUp = EquipmentPickup.pass(equipmentState, character, range, rule, isEquipment, os.clock())
     -- The first pickups are logged to confirm in game that Pickup from Lua works.
     if pickedUp > 0 and equipmentPickupsLogged < EQUIPMENT_PICKUP_LOG_LIMIT then

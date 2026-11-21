@@ -11,6 +11,8 @@ local EquipmentPickup = {}
 -- Remembered ground items are capped so the list cannot grow without bound; the oldest are dropped first.
 local MAX_TRACKED = 300
 local HOOVER_CLASS = "GrimItemHooverComponent"
+-- EGrimItemAffixCategory: 0 base, 1 implicit, 2 random (the ones crafting can replace).
+local RANDOM_AFFIX_CATEGORY = 2
 
 -- New ground item (call from the shared NotifyOnNewObject callback for TQ2WorldItem).
 -- now: time of the drop (seconds), see judgeDelay in newState.
@@ -72,8 +74,8 @@ local function objectName(object)
     return object:GetFullName():match("([^%.:]+)$") or ""
 end
 
--- Affixes of an item instance as { name = affix asset name, level }, e.g. "da_prefix_1_Summons_PerIncreasedDamage_All"
--- (collected first, no work inside the engine loop).
+-- Affixes of an item instance as { name = affix asset name, level, random = rolled (not base/implicit) }, e.g.
+-- "da_prefix_1_Summons_PerIncreasedDamage_All" (collected first, no work inside the engine loop).
 function EquipmentPickup.affixesOf(instance)
     local affixInstances = {}
     instance.m_Affixes:ForEach(function(_, element) affixInstances[#affixInstances + 1] = element:get() end)
@@ -81,7 +83,8 @@ function EquipmentPickup.affixesOf(instance)
     for _, affixInstance in ipairs(affixInstances) do
         local affix = affixInstance.pAffix
         if affix ~= nil and affix:IsValid() then
-            affixes[#affixes + 1] = { name = objectName(affix), level = affixInstance.Level }
+            affixes[#affixes + 1] = { name = objectName(affix), level = affixInstance.Level,
+                                      random = affixInstance.Category == RANDOM_AFFIX_CATEGORY }
         end
     end
     return affixes
@@ -95,15 +98,10 @@ local function wanted(item, instance, rule)
     if rule.lootRules == nil then
         return false
     end
-    local function readAffixNames()
-        local names = {}
-        for _, affix in ipairs(EquipmentPickup.affixesOf(instance)) do
-            names[#names + 1] = affix.name
-        end
-        return names
-    end
     return LootRules.matchesAny(rule.lootRules, { rarity = instance.m_Rarity,
-        typeName = EquipmentPickup.typeNameOf(item), readAffixNames = readAffixNames })
+        typeName = EquipmentPickup.typeNameOf(item),
+        readAffixes = function() return EquipmentPickup.affixesOf(instance) end,
+        maxAffixes = rule.affixPlaces and rule.affixPlaces[instance.m_Rarity] })
 end
 
 -- true/false once the item can be judged, "later" while its content or type is not known yet.
@@ -128,8 +126,9 @@ end
 
 -- One pass. isEquipment(typeName) says whether the type is equipment, or nil while the type is not known yet (item
 -- types are scanned every few seconds; the first item of a newly loaded type waits for the next scan instead of
--- being dropped). rule = { minRarity = lowest rarity or nil, lootRules = rules from LootRules.load or nil }: equipment
--- is picked up if it reaches minRarity or matches one of the loot rules; both nil = off. Call on the game thread.
+-- being dropped). rule = { minRarity = lowest rarity or nil, lootRules = rules from LootRules.load or nil,
+-- affixPlaces = { [rarity] = random affixes it allows } for crafting-aware rules }: equipment is picked up if it
+-- reaches minRarity or matches one of the loot rules; minRarity and lootRules nil = off. Call on the game thread.
 function EquipmentPickup.pass(state, character, range, rule, isEquipment, now)
     if rule.minRarity == nil and rule.lootRules == nil then
         state.items = {}

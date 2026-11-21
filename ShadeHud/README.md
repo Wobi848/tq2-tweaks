@@ -91,7 +91,9 @@ Settings:
 
 Rules like in other ARPG loot filters: within a rule all conditions must hold, and an item is picked up if any rule
 matches. A rule has a **rarity from** (e.g. Rare), optional **item types** (helmet, ring, staff …) and optional
-**affixes** with how many of them one item needs. Example: "Summoner: Rare+, 1 of the summon affixes",
+optional **affixes** with how many of them one item needs. **Count crafting** lets an item with one wanted affix
+too few still count, if the blacksmith can add it (a free affix place, or a useless random affix of the same kind –
+prefix or suffix – to replace). **Presets** (Summoner, Survivability, Epic and better) give a starting point. Example: "Summoner: Rare+, 1 of the summon affixes",
 "Defence: Rare+, 2 of health/barrier/resistance", "Epic and better: Epic+".
 
 1. In game press **F9**. This writes `ShadeHud\affix_dump.txt` with all affixes, charms and relics of the game (and

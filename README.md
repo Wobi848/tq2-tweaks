@@ -124,7 +124,10 @@ The mod folder is `ShadeHud`; in game it is the F5 menu "TQ2 Tweaks". **Single p
   `UGrimItemInstance.m_Affixes[].pAffix`. All 491 are loaded at any time (two dumps, same count). F9 writes them plus
   the ground items' affixes to `affix_dump.txt` (every field under `pcall`, unreadable = `?`). Modelled on Path of
   Exile (filter file + web editor FilterBlade) and Last Epoch (rules with "at least N affixes of this pool"): a
-  file `loot_filter.lua` with rules `{ name, minRarity, needed, types, affixes }` – conditions of a rule combine with
+  file `loot_filter.lua` with rules `{ name, minRarity, needed, craftable, types, affixes }` (craftable: one wanted affix
+  may be missing if crafting can add it – a free place by rarity, `AffixPlacesByRarity`, or a useless random affix of
+  the same kind; the kind comes from the asset name `da_prefix_`/`da_suffix_`, "random" from the affix instance's
+  `Category`) – conditions of a rule combine with
   "and", rules with "or"; pickup only, nothing is hidden. A first version with one count for all affixes was too
   coarse (one summon stat is enough, defence needs two). Editing happens outside the game in `loot_filter.html`
   (offline, no libraries; ~490 affixes are too many for the keyboard menu); the menu only switches the filter. A page

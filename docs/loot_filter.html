@@ -48,6 +48,10 @@
   .remove { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1;
             padding: 4px 8px; border-radius: 6px; }
   .remove:hover { color: var(--danger); background: var(--danger-soft); }
+  .craft-toggle { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; font-size: 14px; cursor: pointer; }
+  .craft-toggle input { margin-top: 3px; }
+  .craft-toggle small { display: block; color: var(--muted); }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .summary { margin-top: 18px; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 14px; }
 
   /* Affix browser */
@@ -95,6 +99,9 @@
       <div class="rule-list" id="ruleList"></div>
       <button class="add-rule" id="addRule">+ New rule</button>
       <p class="hint">An item is picked up if <strong>any</strong> rule matches. Within a rule, all conditions must hold.</p>
+      <h2 style="margin-top:18px">Start from a preset</h2>
+      <div class="presets" id="presets"></div>
+      <p class="hint">Replaces your rules (you are asked first).</p>
     </aside>
 
     <section>
@@ -117,6 +124,10 @@
         <div class="field">
           <div class="field-label needed" id="neededLabel"></div>
           <div class="picked" id="picked"></div>
+          <label class="craft-toggle" id="craftToggle"><input type="checkbox" id="craftable">
+            <span>Count crafting
+              <small>An item that misses one of these affixes still counts if the blacksmith can add it: it has a free
+              affix place, or a useless random affix of the same kind (prefix/suffix) to replace.</small></span></label>
         </div>
 
         <div class="summary" id="summary"></div>
@@ -178,11 +189,42 @@ let rules = loadStored();
 let active = 0;
 const shownKinds = new Set(KINDS.filter(([, , on]) => on).map(([kind]) => kind));
 
+// ---- presets: ready-made rule sets (affix asset names as in the affix dump) ----
+const SUMMON_AFFIXES = ["da_prefix_1_Summons_PerIncreasedDamage_All", "da_prefix_1_Summons_PerIncreasedSpeed_All",
+  "da_prefix_1_Summons_PerIncreasedActivations", "da_suffix_1_Summons_PerIncreasedHealth", "da_suffix_1_Summons_AddRes_All",
+  "da_suffix_1_ActiveCapacitySpirit", "da_suffix_1_PassiveLevelSpirit"];
+const RESISTANCES = ["da_prefix_1_PerFireRes", "da_prefix_1_PerColdRes", "da_prefix_1_PerLightningRes", "da_prefix_1_PerPoisonRes"];
+const LIFE_AND_BARRIER = ["da_suffix_1_Health", "da_suffix_1_EnergyBarrier", "da_suffix_1_FreeBarrier"];
+const SUMMON_UNIQUES = ["da_affix_1_Unique_Capacity_TagSummon_+1", "da_affix_1_Unique_incrAllSpeed",
+  "da_affix_1_Unique_TeucersWarbow_effect", "da_suffix_1_Unique_LowHealth_SummonSpeedAndDmg",
+  "da_suffix_1_Unique_PerSummonReducedDmgTaken", "da_suffix_1_Unique_OnSummonEmpower_SpikeArea",
+  "da_suffix_1_Unique_SummonDeath_HealthRegen", "da_affix_1_DamageSummons_TagBleeding"];
+function presetRule(name, minRarity, needed, types, affixes) {
+  return { name, minRarity, needed, craftable: affixes.length > 0, types: new Set(types), picked: new Set(affixes) };
+}
+const PRESETS = [
+  ["Summoner", () => [
+    presetRule("Summoner jewellery", "Magic", 3, ["ring", "neck", "arm"], SUMMON_AFFIXES),
+    presetRule("Helmet", "Magic", 3, ["head"], [...LIFE_AND_BARRIER, ...RESISTANCES,
+      "da_suffix_1_ActiveCapacitySpirit", "da_suffix_1_PassiveLevelSpirit"]),
+    presetRule("Armour", "Rare", 4, ["shoulder", "torso", "leg"], [...LIFE_AND_BARRIER, ...RESISTANCES,
+      "da_suffix_1_Summons_PerIncreasedHealth", "da_suffix_1_Summons_AddRes_All", "da_prefix_1_PerImpairRes",
+      "da_suffix_1_PerIncreasedCooldownSpeed"]),
+    presetRule("Summoner uniques", "Epic", 1, [], [...SUMMON_UNIQUES, ...SUMMON_AFFIXES.slice(0, 2)]),
+    presetRule("Legendary", "Legendary", 1, [], [])]],
+  ["Survivability (any build)", () => [
+    presetRule("Armour", "Magic", 3, ["head", "shoulder", "torso", "leg", "shield"],
+      [...LIFE_AND_BARRIER, ...RESISTANCES, "da_prefix_1_PerImpairRes"]),
+    presetRule("Jewellery resistances", "Magic", 3, ["ring", "neck"], [...RESISTANCES, "da_suffix_1_EnergyBarrier"]),
+    presetRule("Legendary", "Legendary", 1, [], [])]],
+  ["Epic and better only", () => [presetRule("Epic and better", "Epic", 1, [], [])]],
+];
+
 // ---- storage (per-browser convenience; the file is what counts) ----
 function storedText(key) { try { return localStorage.getItem(key); } catch (error) { return null; } }
 function rememberText(key, text) { try { localStorage.setItem(key, text); } catch (error) { /* convenience only */ } }
 
-function newRule(name) { return { name, minRarity: "Rare", needed: 1, types: new Set(), picked: new Set() }; }
+function newRule(name) { return { name, minRarity: "Rare", needed: 1, craftable: false, types: new Set(), picked: new Set() }; }
 
 function loadStored() {
   try {
@@ -201,9 +243,10 @@ function store() {
 // Rules from a loot_filter.lua written by this page (one header line per rule, see filterText).
 function parseFilter(text) {
   const quoted = part => [...part.matchAll(/"([^"]+)"/g)].map(match => match[1]);
-  const pattern = /\{ name = "([^"]*)", minRarity = (?:nil|"([^"]*)"), needed = (\d+), types = \{([^}]*)\}, affixes = \{([^}]*)\} \}/g;
+  const pattern = /\{ name = "([^"]*)", minRarity = (?:nil|"([^"]*)"), needed = (\d+),( craftable = true,)? types = \{([^}]*)\}, affixes = \{([^}]*)\} \}/g;
   return [...text.matchAll(pattern)].map(match => ({ name: match[1], minRarity: match[2] || "", needed: Number(match[3]),
-    types: new Set(quoted(match[4])), picked: new Set(quoted(match[5]).filter(name => name.startsWith("da_"))) }));
+    craftable: Boolean(match[4]), types: new Set(quoted(match[5])),
+    picked: new Set(quoted(match[6]).filter(name => name.startsWith("da_"))) }));
 }
 
 // The loot_filter.lua text for the rules: one header line per rule, so parseFilter can read it back.
@@ -213,7 +256,8 @@ function filterText() {
   for (const each of rules) {
     const rarity = each.minRarity ? `"${each.minRarity}"` : "nil";
     const types = [...each.types].map(key => `"${key}"`).join(", ");
-    const header = `    { name = "${each.name}", minRarity = ${rarity}, needed = ${each.needed}, types = { ${types} }, affixes = {`;
+    const craft = each.craftable && each.picked.size ? " craftable = true," : "";
+    const header = `    { name = "${each.name}", minRarity = ${rarity}, needed = ${each.needed},${craft} types = { ${types} }, affixes = {`;
     if (!each.picked.size) { lines.push(header + "} },"); continue; }
     lines.push(header);
     for (const name of [...each.picked].sort()) {
@@ -241,14 +285,16 @@ function neededOf(each) { return Math.min(each.needed, each.picked.size); }
 function describe(each) {
   return [each.minRarity ? each.minRarity + "+" : "Any rarity",
           each.types.size ? typeNames(each) : "all types",
-          each.picked.size ? `${neededOf(each)} of ${each.picked.size} affixes` : "no affix condition"].join(" · ");
+          each.picked.size ? `${neededOf(each)} of ${each.picked.size} affixes${each.craftable ? " (with crafting)" : ""}`
+                           : "no affix condition"].join(" · ");
 }
 
 function sentence(each) {
   const rarity = each.minRarity ? `${each.minRarity} or better` : "any rarity";
   const types = each.types.size ? typeNames(each) : "any item type";
   if (!each.picked.size) return `Picks up every item of ${rarity} (${types}).`;
-  return `Picks up items of ${rarity} (${types}) that carry at least ${neededOf(each)} of the ${each.picked.size} affixes above.`;
+  const craft = each.craftable ? " – or one less, if crafting can add the missing one" : "";
+  return `Picks up items of ${rarity} (${types}) that carry at least ${neededOf(each)} of the ${each.picked.size} affixes above${craft}.`;
 }
 
 // ---- rendering ----
@@ -306,6 +352,8 @@ function renderPicked() {
   } else {
     label.append("Affixes ", element("small", "", "none yet – add some below, or leave empty to decide by rarity and type only"));
   }
+  document.getElementById("craftToggle").hidden = !rule().picked.size;
+  document.getElementById("craftable").checked = Boolean(rule().craftable);
   const picked = document.getElementById("picked");
   picked.replaceChildren();
   const sorted = [...rule().picked].sort((a, b) => (byName.get(a)?.label || a).localeCompare(byName.get(b)?.label || b));
@@ -383,7 +431,23 @@ function renderSaveState() {
   }
 }
 
+function renderPresets() {
+  const box = document.getElementById("presets");
+  box.replaceChildren();
+  for (const [label, make] of PRESETS) {
+    const button = element("button", "chip", label);
+    button.addEventListener("click", () => {
+      if (!confirm(`Replace your rules with the preset “${label}”?`)) return;
+      rules = make();
+      active = 0;
+      changed();
+    });
+    box.append(button);
+  }
+}
+
 function render() {
+  renderPresets();
   renderRuleList();
   renderEditor();
   renderBrowser();
@@ -410,6 +474,7 @@ document.getElementById("deleteRule").addEventListener("click", () => {
   changed();
 });
 document.getElementById("search").addEventListener("input", renderBrowser);
+document.getElementById("craftable").addEventListener("change", event => { rule().craftable = event.target.checked; changed(); });
 
 document.getElementById("save").addEventListener("click", () => {
   const text = filterText();

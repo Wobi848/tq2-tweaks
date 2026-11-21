@@ -139,6 +139,9 @@ return {
     -- folder) is picked up, in addition to the rarity rule above.
     LootFilter = 1,
     LootFilterFile = "loot_filter.lua",
+    -- How many random affixes an item of a rarity can have (for loot rules that count crafting): Magic 3, Rare 4,
+    -- Infrequent 4. Epic and better are uniques with fixed affixes.
+    AffixPlacesByRarity = { [1] = 3, [2] = 4, [3] = 4 },
     -- Equipment pickup: how often it checks remembered ground items, and the range used until the player's own
     -- pickup range (hoover) is found.
     EquipmentPickupIntervalMs = 250,

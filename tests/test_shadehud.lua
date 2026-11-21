@@ -945,6 +945,30 @@ check("rule Defence: two defence affixes on the listed types only",
     and not matches(2, "da_armor_leg_greek_paladin", HEALTH, BARRIER))
 writeFilter('return { { name = "Arms", types = { "arm" } } }\n')
 local armRules = LootRules.load(filterPath, RARITY, logFilter)
+do
+    local SPEED, FIRE_DMG, COLD_DMG = "da_prefix_1_Summons_PerIncreasedSpeed_All", "da_prefix_1_PerIncreasedFireDmg", "da_prefix_1_PerIncreasedColdDmg"
+    local AGILITY = "da_suffix_1_Agility"
+    writeFilter('return { { name = "Jewellery", minRarity = "Magic", needed = 3, craftable = true, affixes = { "'
+        .. SUMMON_DAMAGE .. '", "' .. SPEED .. '", "' .. SUMMON_HEALTH .. '" } },\n'
+        .. '  { name = "Plain", minRarity = "Magic", needed = 3, affixes = { "' .. SUMMON_DAMAGE .. '", "' .. SPEED .. '", "' .. SUMMON_HEALTH .. '" } } }\n')
+    local craftRules = LootRules.load(filterPath, RARITY, logFilter)
+    local function item(rarity, maxAffixes, ...)
+        local affixes = {}
+        for _, name in ipairs({ ... }) do affixes[#affixes + 1] = { name = name, random = true } end
+        return { rarity = rarity, typeName = "da_jewelry_ring_x", maxAffixes = maxAffixes, affixes = affixes }
+    end
+    check("crafting: a magic item with 2 wanted affixes and a free place counts (add + replace)",
+        LootRules.matchesAny({ craftRules[1] }, item(1, 3, SUMMON_DAMAGE, SUMMON_HEALTH))
+        and not LootRules.matchesAny({ craftRules[2] }, item(1, 3, SUMMON_DAMAGE, SUMMON_HEALTH)))
+    check("crafting: a full rare counts when a useless random affix of the missing kind can be replaced",
+        LootRules.matchesAny({ craftRules[1] }, item(2, 4, SUMMON_DAMAGE, SUMMON_HEALTH, FIRE_DMG, AGILITY)))
+    check("crafting: a prefix cannot become the missing suffix",
+        not LootRules.matchesAny({ craftRules[1] }, item(2, 4, SUMMON_DAMAGE, SPEED, FIRE_DMG, COLD_DMG)))
+    local unique = { rarity = 4, typeName = "da_jewelry_ring_x", affixes = {
+        { name = SUMMON_DAMAGE, random = false }, { name = SPEED, random = false }, { name = FIRE_DMG, random = false } } }
+    check("crafting: fixed (non-random) affixes of uniques are not replaceable",
+        not LootRules.matchesAny({ craftRules[1] }, unique))
+end
 check("type parts match whole parts of the type name (arm is not armor)",
     LootRules.matchesAny(armRules, { rarity = 0, typeName = "da_armor_arm_greek_paladin", affixNames = {} })
     and not LootRules.matchesAny(armRules, { rarity = 0, typeName = "da_armor_head_greek_paladin", affixNames = {} }))
@@ -1013,7 +1037,7 @@ do
 end
 check("affixes are read only when a rule with affixes is reached (epic item via the rarity-only rule)",
     LootRules.matchesAny(rules, { rarity = 4, typeName = "da_jewelry_ring_x",
-        readAffixNames = function() error("affixes read") end }) == true)
+        readAffixes = function() error("affixes read") end }) == true)
 check("affix dump key bound (for the affix picker)", keyBinds.F9 ~= nil)
 
 do

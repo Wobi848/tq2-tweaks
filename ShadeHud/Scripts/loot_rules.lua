@@ -3,7 +3,9 @@
 -- conditions with "and", and an item is picked up if any rule matches. A rule (all fields optional):
 --   { name = "Summoner", minRarity = "Rare", types = { "staff", "ring" }, needed = 1, affixes = { "<affix asset>" } }
 -- types are parts of the item type name (da_weapon_2h_staff_..., da_jewelry_ring_...); needed = how many of the
--- listed affixes one item must carry (default 1).
+-- listed affixes one item must carry (default 1). With craftable = true, one more counts if crafting can add it: the
+-- blacksmith replaces one random affix (a prefix stays a prefix, a suffix a suffix) and fills free affix places, so an
+-- item that misses one wanted affix still counts when it has a useless random affix of the right kind or a free place.
 local LootRules = {}
 
 local function setOf(names)
@@ -45,7 +47,7 @@ local function ruleOf(entry, rarityByName)
     if minRarity == nil and #types == 0 and affixCount == 0 then
         return nil, name .. ": no condition, it would pick up everything"
     end
-    return { name = name, minRarity = minRarity, types = types,
+    return { name = name, minRarity = minRarity, types = types, craftable = entry.craftable == true,
              affixes = affixCount > 0 and affixes or nil,
              needed = math.min(affixCount, math.max(1, math.floor(tonumber(entry.needed) or 1))) }
 end
@@ -96,22 +98,85 @@ local function typeMatches(rule, typeName)
     return false
 end
 
-local function affixesMatch(rule, affixNames)
+-- "prefix" or "suffix" for a random affix by its asset name (da_prefix_..., da_suffix_...), nil for other affixes.
+local function slotKind(name)
+    return name:match("^da_(prefix)_") or name:match("^da_(suffix)_")
+end
+
+-- 1 if crafting can add one more wanted affix: a wanted kind (prefix/suffix) is still missing and the item has a free
+-- affix place or a useless random affix of that kind to replace; else 0.
+local function craftBonus(rule, affixes, freePlaces)
+    local present, missingKinds = {}, {}
+    for _, affix in ipairs(affixes) do
+        present[affix.name] = true
+    end
+    for name in pairs(rule.affixes) do
+        local kind = not present[name] and slotKind(name)
+        if kind then
+            missingKinds[kind] = true
+        end
+    end
+    if next(missingKinds) == nil then
+        return 0
+    end
+    if freePlaces > 0 then
+        return 1
+    end
+    for _, affix in ipairs(affixes) do
+        local kind = affix.random and not rule.affixes[affix.name] and slotKind(affix.name)
+        if kind and missingKinds[kind] then
+            return 1
+        end
+    end
+    return 0
+end
+
+local function affixesMatch(rule, affixes, freePlaces)
     if rule.affixes == nil then
         return true
     end
     local count = 0
-    for _, affixName in ipairs(affixNames) do
-        if rule.affixes[affixName] then
+    for _, affix in ipairs(affixes) do
+        if rule.affixes[affix.name] then
             count = count + 1
         end
     end
-    return count >= rule.needed
+    if count >= rule.needed then
+        return true
+    end
+    return rule.craftable and count + craftBonus(rule, affixes, freePlaces) >= rule.needed
 end
 
--- Whether an item { rarity, typeName, affixNames or readAffixNames } matches one of the rules. Rules without an affix
--- condition are checked first; readAffixNames is called at most once, and only when a rule with affixes fits by
--- rarity and type (reading the affixes of a game item is the expensive and touchy part).
+-- The item's affixes as { name, random } (a plain list of names counts as random affixes).
+local function affixesOfItem(item)
+    if item.affixes then
+        return item.affixes
+    end
+    if item.affixNames then
+        local affixes = {}
+        for index, name in ipairs(item.affixNames) do
+            affixes[index] = { name = name, random = true }
+        end
+        return affixes
+    end
+    return item.readAffixes()
+end
+
+local function freePlacesOf(item, affixes)
+    if item.maxAffixes == nil then
+        return 0
+    end
+    local random = 0
+    for _, affix in ipairs(affixes) do
+        random = random + (affix.random and 1 or 0)
+    end
+    return math.max(0, item.maxAffixes - random)
+end
+
+-- Whether an item { rarity, typeName, affixes or affixNames or readAffixes, maxAffixes } matches one of the rules.
+-- affixes are { name, random }; maxAffixes is how many random affixes its rarity allows (nil = no crafting). Rules
+-- without an affix condition are checked first; readAffixes is called at most once, and only when a rule with
+-- affixes fits by rarity and type (reading the affixes of a game item is the expensive and touchy part).
 function LootRules.matchesAny(rules, item)
     local function fits(rule)
         return (rule.minRarity == nil or item.rarity >= rule.minRarity) and typeMatches(rule, item.typeName)
@@ -121,11 +186,14 @@ function LootRules.matchesAny(rules, item)
             return true
         end
     end
-    local affixNames = item.affixNames
+    local affixes, freePlaces
     for _, rule in ipairs(rules) do
         if rule.affixes ~= nil and fits(rule) then
-            affixNames = affixNames or item.readAffixNames()
-            if affixesMatch(rule, affixNames) then
+            if affixes == nil then
+                affixes = affixesOfItem(item)
+                freePlaces = freePlacesOf(item, affixes)
+            end
+            if affixesMatch(rule, affixes, freePlaces) then
                 return true
             end
         end
