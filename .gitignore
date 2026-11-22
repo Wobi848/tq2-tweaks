@@ -22,3 +22,4 @@ TQ2Tweaks/dev_command.txt
 TQ2Tweaks/call_result.json
 TQ2Tweaks/mega_dump_rules.lua
 TQ2Tweaks/loot_filter.lua
+__pycache__/
