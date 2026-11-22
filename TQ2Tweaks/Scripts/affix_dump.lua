@@ -1,9 +1,12 @@
--- Affix dump (AffixDumpKey): writes every loaded item affix (UGrimItemAffix) with its tags and level
--- texts, plus the affixes of the items lying on the ground, to a text file in the mod folder. The loot filter
--- editor (loot_filter.html) reads this file to choose the affixes for equipment pickup. Only reads.
-local DamageHook = require("damage_hook")
+-- Affix dump (AffixDumpKey): writes every loaded item affix (UGrimItemAffix) with its tags and level texts, the
+-- affixes of the items lying on the ground, the random affix pool of every item type and the charms and relics
+-- (socketable_dump.lua) to a text file in the mod folder. The loot filter editor (loot_filter.html) reads this file
+-- to choose the affixes for equipment pickup. Only reads.
 local EquipmentPickup = require("equipment_pickup")
+local GameObject = require("game_object")
 local JsonText = require("json_text")
+local SocketableDump = require("socketable_dump")
+local TextFile = require("text_file")
 
 local AffixDump = {}
 
@@ -16,22 +19,17 @@ local UNREADABLE = "?"
 -- Value of read(), or "?" if the field cannot be read (fields differ between affixes; one bad field must not stop
 -- the dump).
 local function readOr(read)
-    local ok, value = pcall(read)
-    if not ok or value == nil then
+    local value = GameObject.read(read)
+    if value == nil then
         return UNREADABLE
     end
     return value
 end
 
--- TArray as a Lua list (collected first, no work inside the engine loop).
-local function listOf(array)
-    local list = {}
-    array:ForEach(function(_, element) list[#list + 1] = element:get() end)
-    return list
-end
+local listOf = GameObject.listOf
 
 local function objectName(object)
-    return object:GetFullName():match("([^%.:]+)$") or UNREADABLE
+    return GameObject.shortName(object) or UNREADABLE
 end
 
 local function describeEffect(effect)
@@ -59,7 +57,7 @@ function AffixDump.describeAffix(affix)
     end
     return { name = readOr(function() return objectName(affix) end),
              type = readOr(function() return affix.m_Type end),
-             tags = readOr(function() return table.concat(DamageHook.tagNames(affix.m_GameplayTags), ", ") end),
+             tags = readOr(function() return table.concat(GameObject.tagNames(affix.m_GameplayTags), ", ") end),
              levels = levels }
 end
 
@@ -119,77 +117,6 @@ function AffixDump.describePool(description, cache)
     return { type = objectName(description), affixes = affixes }
 end
 
-local function formulaText(formula)
-    return readOr(function() return formula.SourceText:ToString() end)
-end
-
--- Effects of a socketable stage (FTQ2SocketableItemEffects) as "tooltip [min..max]" texts.
-local function socketEffects(effects)
-    local texts = {}
-    for _, effect in ipairs(listOf(effects.effects)) do
-        local tooltip = readOr(function() return effect.ToolTipText:ToString() end)
-        local low, high = formulaText(effect.Scale.min), formulaText(effect.Scale.max)
-        texts[#texts + 1] = string.format("%s [%s..%s]", tostring(tooltip), tostring(low), tostring(high))
-    end
-    return texts
-end
-
-local REQUIREMENT_MODES = { [0] = "any of", [1] = "all of", [2] = "none of", [3] = "not all of" }
-
--- A tag requirement (FGrimGameplayTagRequirement) as text, e.g. "any of Weapon, Ring"; nil when it has no tags.
-local function requirementText(requirement)
-    local base = requirement.BaseRequirement
-    local names = DamageHook.tagNames(base.GameplayTags)
-    if #names == 0 then
-        return nil
-    end
-    local short = {}
-    for index, name in ipairs(names) do
-        short[index] = name:gsub("^GrimVentory%.ItemType%.", "")
-    end
-    return (REQUIREMENT_MODES[base.RequirementType] or "?") .. " " .. table.concat(short, ", ")
-end
-
--- Where a charm or relic may go (its UGrimItemFilter): item types, other tags and the allowed rarities as a bit mask
--- (bit n = rarity n, 0 Common … 5 Legendary).
-local function socketTargets(filter)
-    if filter == nil or not readOr(function() return filter:IsValid() end) then
-        return "any item"
-    end
-    -- Unlike readOr, a missing requirement is nil here (no condition), not "?".
-    local function optional(read)
-        local ok, value = pcall(read)
-        return ok and value or nil
-    end
-    local parts = {}
-    local types = optional(function() return requirementText(filter.m_ItemTypeRequirement) end)
-    local tags = optional(function() return requirementText(filter.m_GameplayTagsRequirement) end)
-    local rarities = readOr(function() return filter.m_AllowedRarities end)
-    parts[#parts + 1] = "types " .. (types or "any")
-    if tags then
-        parts[#parts + 1] = "tags " .. tags
-    end
-    parts[#parts + 1] = "rarity mask " .. tostring(rarities)
-    return table.concat(parts, "; ")
-end
-
--- Charm or relic (UTQ2SocketableItemDescription, a sub-object of its item type): effects per completion stage, the
--- completion bonus and the items it may be socketed into. nil if it cannot be read.
-function AffixDump.describeSocketable(socketable)
-    local stages = {}
-    local ok = pcall(function()
-        for _, stage in ipairs(listOf(socketable.m_EffectsByCompletionLevel)) do
-            stages[#stages + 1] = socketEffects(stage)
-        end
-    end)
-    if not ok then
-        return nil
-    end
-    return { item = readOr(function() return objectName(socketable:GetOuter()) end) or objectName(socketable),
-             stages = stages, bonus = readOr(function() return socketEffects(socketable.m_CompletionBonus) end) or {},
-             targets = readOr(function() return socketTargets(socketable.m_pValidTargetFilter) end) or "?" }
-end
-
 -- Item types with the same pool share one entry: { types = sorted names, affixes }.
 local function groupedPools(pools)
     local byKey, groups = {}, {}
@@ -243,17 +170,9 @@ function AffixDump.lines(affixes, groundItems, pools, socketables)
         lines[#lines + 1] = "POOL types=" .. table.concat(group.types, ",")
         lines[#lines + 1] = "  affixes=" .. table.concat(group.affixes, ",")
     end
-    socketables = socketables or {}
-    table.sort(socketables, function(a, b) return a.item < b.item end)
     lines[#lines + 1] = ""
-    lines[#lines + 1] = string.format("SOCKETABLES (%d)", #socketables)
-    for _, socketable in ipairs(socketables) do
-        lines[#lines + 1] = "SOCKETABLE " .. socketable.item
-        for index, stage in ipairs(socketable.stages) do
-            lines[#lines + 1] = string.format("  stage %d: %s", index, table.concat(stage, " | "))
-        end
-        lines[#lines + 1] = "  bonus: " .. table.concat(socketable.bonus, " | ")
-        lines[#lines + 1] = "  sockets into: " .. socketable.targets
+    for _, line in ipairs(SocketableDump.lines(socketables or {})) do
+        lines[#lines + 1] = line
     end
     return lines
 end
@@ -269,25 +188,12 @@ local function describeAll(className, describe)
     return result
 end
 
-local function readAll(path)
-    local file = io.open(path, "r")
-    if file == nil then
-        return nil
-    end
-    local text = file:read("a")
-    file:close()
-    return text
-end
-
 local function writeAll(path, text, log)
-    local file, openError = io.open(path, "w")
-    if file == nil then
-        log("Affix dump not written: " .. tostring(openError))
-        return false
+    local ok, reason = TextFile.write(path, text)
+    if not ok then
+        log("Affix dump not written: " .. reason)
     end
-    file:write(text)
-    file:close()
-    return true
+    return ok
 end
 
 -- The data file next to loot_filter.html: a browser may not read local files on its own, but it loads a script
@@ -304,10 +210,10 @@ function AffixDump.write(paths, log)
     local lines = AffixDump.lines(describeAll(AFFIX_CLASS, AffixDump.describeAffix),
         describeAll(WORLD_ITEM_CLASS, AffixDump.describeGroundItem),
         describeAll(ITEM_DESCRIPTION_CLASS, function(description) return AffixDump.describePool(description, cache) end),
-        describeAll(SOCKETABLE_CLASS, AffixDump.describeSocketable))
+        describeAll(SOCKETABLE_CLASS, SocketableDump.describe))
     local dumpText = table.concat(lines, "\n") .. "\n"
     if writeAll(paths.dump, dumpText, log)
-        and writeAll(paths.pageData, AffixDump.pageData(dumpText, readAll(paths.filter)), log) then
+        and writeAll(paths.pageData, AffixDump.pageData(dumpText, TextFile.read(paths.filter)), log) then
         log(string.format("Affix dump written to %s (%d lines)", paths.dump, #lines))
     end
 end

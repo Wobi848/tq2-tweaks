@@ -5,6 +5,7 @@
 -- level loads is not multiplied again. "Shortly after" and not "during": the game queues dropped items
 -- (UGrimVentoryWorldSubsystem.m_PendingItemSpawns) and spawns them after LaunchDropList has returned.
 local WorldItems = require("world_items")
+local GameObject = require("game_object")
 
 local GoldMultiplier = {}
 
@@ -16,15 +17,13 @@ local MAX_ATTEMPTS = 50
 -- Seconds after an enemy drop during which new gold piles count as part of it.
 local ENEMY_DROP_WINDOW_SECONDS = 2
 
-local function isEnemy(source)
-    return source ~= nil and source:IsValid() and source:IsA(ENEMY_CLASS)
+-- The slot structs of the pile.
+local function slotsOf(item)
+    return GameObject.listOf(item.m_ContainerData.ItemSlots)
 end
 
--- The slot structs of the pile, collected without doing any work inside the engine's iteration.
-local function slotsOf(item)
-    local slots = {}
-    item.m_ContainerData.ItemSlots:ForEach(function(_, element) slots[#slots + 1] = element:get() end)
-    return slots
+local function isEnemy(source)
+    return source ~= nil and source:IsValid() and source:IsA(ENEMY_CLASS)
 end
 
 -- Multiplies the amount in the first filled slot of the pile. Returns "applied" or "not applied" if a slot was

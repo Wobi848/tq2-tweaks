@@ -5,6 +5,7 @@
 -- pass the ones of high enough rarity within hoover range are picked up with AGrimWorldItem:Pickup(player, false).
 -- Each item is tried once; if it is still there afterwards (inventory full) it is dropped from the list.
 local LootRules = require("loot_rules")
+local GameObject = require("game_object")
 
 local EquipmentPickup = {}
 
@@ -56,12 +57,9 @@ function EquipmentPickup.hooverRange(state, character, fallback)
 end
 
 -- Item instance (UGrimItemInstance) of the item on the ground, or nil while its content is not filled in yet. Read
--- from the slot array the same way the gold multiplier reads the pile amount (collected first, no work inside the
--- engine loop).
+-- from the slot array the same way the gold multiplier reads the pile amount.
 function EquipmentPickup.instanceOf(item)
-    local slots = {}
-    item.m_ContainerData.ItemSlots:ForEach(function(_, element) slots[#slots + 1] = element:get() end)
-    for _, slot in ipairs(slots) do
+    for _, slot in ipairs(GameObject.listOf(item.m_ContainerData.ItemSlots)) do
         local instance = slot.ItemHandle.pItem
         if instance ~= nil and instance:IsValid() then
             return instance
@@ -70,24 +68,38 @@ function EquipmentPickup.instanceOf(item)
     return nil
 end
 
-local function objectName(object)
-    return object:GetFullName():match("([^%.:]+)$") or ""
-end
-
 -- Affixes of an item instance as { name = affix asset name, level, random = rolled (not base/implicit) }, e.g.
--- "da_prefix_1_Summons_PerIncreasedDamage_All" (collected first, no work inside the engine loop).
+-- "da_prefix_1_Summons_PerIncreasedDamage_All".
 function EquipmentPickup.affixesOf(instance)
-    local affixInstances = {}
-    instance.m_Affixes:ForEach(function(_, element) affixInstances[#affixInstances + 1] = element:get() end)
     local affixes = {}
-    for _, affixInstance in ipairs(affixInstances) do
+    for _, affixInstance in ipairs(GameObject.listOf(instance.m_Affixes)) do
         local affix = affixInstance.pAffix
         if affix ~= nil and affix:IsValid() then
-            affixes[#affixes + 1] = { name = objectName(affix), level = affixInstance.Level,
+            affixes[#affixes + 1] = { name = GameObject.shortName(affix) or "", level = affixInstance.Level,
                                       random = affixInstance.Category == RANDOM_AFFIX_CATEGORY }
         end
     end
     return affixes
+end
+
+-- The items the player wears, as { typeName, rarity, affixes, maxAffixes } for LootRules (only upgrades).
+function EquipmentPickup.wornItems(character, affixPlaces)
+    local equipment = GameObject.read(function() return character.PlayerState.m_pEquipmentContainer end)
+    if not GameObject.usable(equipment) then
+        return {}
+    end
+    local worn = {}
+    for _, slot in ipairs(GameObject.listOf(equipment.m_ContainerData.ItemSlots)) do
+        local instance = slot.ItemHandle.pItem
+        local description = GameObject.usable(instance)
+            and GameObject.read(function() return instance.m_pDescription.HardReference end)
+        if GameObject.usable(description) then
+            worn[#worn + 1] = { typeName = GameObject.shortName(description) or "", rarity = instance.m_Rarity,
+                                affixes = EquipmentPickup.affixesOf(instance),
+                                maxAffixes = affixPlaces and affixPlaces[instance.m_Rarity] }
+        end
+    end
+    return worn
 end
 
 -- Whether the ground item passes the rule (see pass).
@@ -101,7 +113,8 @@ local function wanted(item, instance, rule)
     return LootRules.matchesAny(rule.lootRules, { rarity = instance.m_Rarity,
         typeName = EquipmentPickup.typeNameOf(item),
         readAffixes = function() return EquipmentPickup.affixesOf(instance) end,
-        maxAffixes = rule.affixPlaces and rule.affixPlaces[instance.m_Rarity] })
+        maxAffixes = rule.affixPlaces and rule.affixPlaces[instance.m_Rarity],
+        readWorn = rule.readWorn })
 end
 
 -- true/false once the item can be judged, "later" while its content or type is not known yet.
@@ -116,7 +129,7 @@ end
 
 -- Item type name of a ground item: ground items are named "<type>_WorldItem[_<n>]".
 function EquipmentPickup.typeNameOf(item)
-    return (objectName(item):gsub("_WorldItem.*$", ""))
+    return ((GameObject.shortName(item) or ""):gsub("_WorldItem.*$", ""))
 end
 
 local function distance(a, b)
@@ -127,12 +140,21 @@ end
 -- One pass. isEquipment(typeName) says whether the type is equipment, or nil while the type is not known yet (item
 -- types are scanned every few seconds; the first item of a newly loaded type waits for the next scan instead of
 -- being dropped). rule = { minRarity = lowest rarity or nil, lootRules = rules from LootRules.load or nil,
--- affixPlaces = { [rarity] = random affixes it allows } for crafting-aware rules }: equipment is picked up if it
--- reaches minRarity or matches one of the loot rules; minRarity and lootRules nil = off. Call on the game thread.
+-- affixPlaces = { [rarity] = random affixes it allows } for crafting-aware rules, upgradesOnly = loot rules with
+-- affixes only take items that beat the worn one }: equipment is picked up if it reaches minRarity or matches one of
+-- the loot rules; minRarity and lootRules nil = off. Call on the game thread.
 function EquipmentPickup.pass(state, character, range, rule, isEquipment, now)
     if rule.minRarity == nil and rule.lootRules == nil then
         state.items = {}
         return 0
+    end
+    if rule.upgradesOnly then
+        -- The worn items are read at most once per pass, and only when an item is judged by an affix rule.
+        local worn = nil
+        rule.readWorn = function()
+            worn = worn or EquipmentPickup.wornItems(character, rule.affixPlaces)
+            return worn
+        end
     end
     local here = character:K2_GetActorLocation()
     local kept, pickedUp = {}, 0

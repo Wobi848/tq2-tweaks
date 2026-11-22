@@ -93,7 +93,10 @@ Rules like in other ARPG loot filters: within a rule all conditions must hold, a
 matches. A rule has a **rarity from** (e.g. Rare), optional **item types** (helmet, ring, staff …) and optional
 optional **affixes** with how many of them one item needs. **Count crafting** lets an item with one wanted affix
 too few still count, if the blacksmith can add it (a free affix place, or a useless random affix of the same kind –
-prefix or suffix – to replace). **Presets** (Summoner, Survivability, Epic and better) give a starting point. Example: "Summoner: Rare+, 1 of the summon affixes",
+prefix or suffix – to replace). **Only upgrades** (F5 menu, under "Loot filter", on by default): a rule with affixes
+only picks up an item that scores higher than the item you wear in that slot (wanted affixes, plus one with Count
+crafting; for rings the weaker ring counts), so items that cannot become better than your gear stay on the ground.
+**Presets** (Summoner, Survivability, Epic and better) give a starting point. Example: "Summoner: Rare+, 1 of the summon affixes",
 "Defence: Rare+, 2 of health/barrier/resistance", "Epic and better: Epic+".
 
 1. In game press **F9**. This writes `TQ2Tweaks\affix_dump.txt` with all affixes, charms and relics of the game (and

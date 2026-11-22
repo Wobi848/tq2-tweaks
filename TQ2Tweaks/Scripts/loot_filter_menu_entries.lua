@@ -65,4 +65,14 @@ function LootFilterMenuEntries.fill(entries, rules, queueEdit)
     end
 end
 
+-- Entry list of the tab that holds the loot filter section, or nil if no tab does.
+function LootFilterMenuEntries.tabEntries(menuTabs)
+    for _, tab in ipairs(menuTabs) do
+        if tab.entries[1] and tab.entries[1].header == LootFilterMenuEntries.HEADER then
+            return tab.entries
+        end
+    end
+    return nil
+end
+
 return LootFilterMenuEntries

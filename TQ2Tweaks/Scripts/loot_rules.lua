@@ -139,20 +139,32 @@ local function craftBonus(rule, affixes, freePlaces)
     return 0
 end
 
-local function affixesMatch(rule, affixes, freePlaces)
-    if rule.affixes == nil then
-        return true
-    end
+-- How many of the rule's affixes the item carries, plus one if the rule counts crafting and crafting can add one.
+local function score(rule, affixes, freePlaces)
     local count = 0
     for _, affix in ipairs(affixes) do
         if rule.affixes[affix.name] then
             count = count + 1
         end
     end
-    if count >= rule.needed then
-        return true
+    if rule.craftable then
+        count = count + craftBonus(rule, affixes, freePlaces)
     end
-    return rule.craftable and count + craftBonus(rule, affixes, freePlaces) >= rule.needed
+    return count
+end
+
+-- Equipment slot of an item type: "head", "ring", "offhand", "weapon", ... (da_armor_head_..., da_jewelry_ring_...,
+-- da_weapon_offhand_..., da_weapon_2h_...), nil for anything else.
+local function slotOf(typeName)
+    local name = typeName:lower()
+    local slot = name:match("^da_armor_(%a+)_") or name:match("^da_jewelry_(%a+)_")
+    if slot then
+        return slot
+    end
+    if name:find("^da_weapon_") then
+        return name:find("_offhand_", 1, true) and "offhand" or "weapon"
+    end
+    return nil
 end
 
 -- The item's affixes as { name, random } (a plain list of names counts as random affixes).
@@ -181,10 +193,27 @@ local function freePlacesOf(item, affixes)
     return math.max(0, item.maxAffixes - random)
 end
 
--- Whether an item { rarity, typeName, affixes or affixNames or readAffixes, maxAffixes } matches one of the rules.
--- affixes are { name, random }; maxAffixes is how many random affixes its rarity allows (nil = no crafting). Rules
--- without an affix condition are checked first; readAffixes is called at most once, and only when a rule with
--- affixes fits by rarity and type (reading the affixes of a game item is the expensive and touchy part).
+-- Whether the item beats what the player wears in its slot under this rule: its score is higher than the weakest
+-- worn item of the same slot (both rings count, the weaker one is replaced). An empty slot is always beaten.
+local function beatsWorn(rule, item, itemScore)
+    local slot = slotOf(item.typeName)
+    local weakest = nil
+    for _, worn in ipairs(slot and item.readWorn() or {}) do
+        if slotOf(worn.typeName) == slot then
+            local wornAffixes = affixesOfItem(worn)
+            local wornScore = score(rule, wornAffixes, freePlacesOf(worn, wornAffixes))
+            weakest = math.min(weakest or wornScore, wornScore)
+        end
+    end
+    return weakest == nil or itemScore > weakest
+end
+
+-- Whether an item { rarity, typeName, affixes or affixNames or readAffixes, maxAffixes, readWorn } matches one of
+-- the rules. affixes are { name, random }; maxAffixes is how many random affixes its rarity allows (nil = no
+-- crafting). With readWorn (only upgrades), a rule with affixes also needs the item to score higher than the worn
+-- item of its slot; readWorn() returns the worn items in the same form. Rules without an affix condition are checked
+-- first; readAffixes is called at most once, and only when a rule with affixes fits by rarity and type (reading the
+-- affixes of a game item is the expensive and touchy part).
 function LootRules.matchesAny(rules, item)
     local function fits(rule)
         return rule.enabled and (rule.minRarity == nil or item.rarity >= rule.minRarity)
@@ -202,7 +231,8 @@ function LootRules.matchesAny(rules, item)
                 affixes = affixesOfItem(item)
                 freePlaces = freePlacesOf(item, affixes)
             end
-            if affixesMatch(rule, affixes, freePlaces) then
+            local itemScore = score(rule, affixes, freePlaces)
+            if itemScore >= rule.needed and (item.readWorn == nil or beatsWorn(rule, item, itemScore)) then
                 return true
             end
         end

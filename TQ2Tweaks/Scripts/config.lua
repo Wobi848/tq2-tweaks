@@ -138,6 +138,10 @@ return {
     -- Loot filter: equipment matching one of the rules made in loot_filter.html (saved as LootFilterFile in the mod
     -- folder) is picked up, in addition to the rarity rule above.
     LootFilter = 1,
+    -- Index into OnOffOptions, On by default: loot rules with affixes only pick up items that score higher than the
+    -- item worn in the same slot (wanted affixes, plus one if the rule counts crafting); both rings count, the
+    -- weaker one is compared. Rules without affixes (e.g. "Legendary") are not affected.
+    LootFilterUpgradesOnly = 2,
     LootFilterFile = "loot_filter.lua",
     -- How often the mod looks whether loot_filter.lua changed (saved from the browser page) and reads it again.
     LootFilterCheckMs = 2000,
@@ -273,6 +277,15 @@ return {
     GameDataPageFile = "game_data.js",
     -- With Ctrl (and GameDataDump): every data asset of the game, read generically, one JSON line each.
     MegaDumpFile = "mega_dump.jsonl",
+    -- Optional rules what the mega dump follows besides the assets (see DEFAULT_RULES in mega_dump.lua). Read at every
+    -- dump, so it can be changed while the game runs.
+    MegaDumpRulesFile = "mega_dump_rules.lua",
     -- The game's list of its data assets, relative to the game folder (TQ2).
     GameDataCacheFile = "CookedData/JsonMetaDataCache.json",
+    -- With GameDataDump: a file in the mod folder holding "dump", "gamedata" or "mega" starts that dump (then the
+    -- file is removed), so dumps can be started from outside the game. Checked every DevCommandCheckMs.
+    DevCommandFile = "dev_command.txt",
+    -- Result of the command "call <Class> <Function> <number> ..." (game functions computed in code, not in data).
+    CallResultFile = "call_result.json",
+    DevCommandCheckMs = 2000,
 }

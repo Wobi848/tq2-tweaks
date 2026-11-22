@@ -2,9 +2,11 @@
 -- writes the creatures with their drop lists, the global drop lists and the affix tables of all item types to a JSON
 -- file in the mod folder. Chances, weights and counts are formulas in the game; their source text is written as it is
 -- (e.g. "0.05 * Level"). Only reads. Assets are loaded in small batches so the game keeps running.
-local DamageHook = require("damage_hook")
+local AssetList = require("asset_list")
+local GameObject = require("game_object")
 local JsonText = require("json_text")
 local BatchJob = require("batch_job")
+local TextFile = require("text_file")
 
 local GameDataDump = {}
 
@@ -14,45 +16,11 @@ local ITEM_DESCRIPTION_CLASS = "TQ2ItemDescription"
 local BATCH_SIZE = 20
 local BATCH_DELAY_MS = 50
 
--- Asset paths of one class from JsonMetaDataCache.json ({ "pathsByClass": { "<class>": { "paths": [ ... ] } } }).
-function GameDataDump.pathsOfClass(cacheText, className)
-    local pattern = '"' .. className:gsub("%p", "%%%0") .. '"%s*:%s*{%s*"paths"%s*:%s*%[(.-)%]'
-    local paths = {}
-    for path in (cacheText:match(pattern) or ""):gmatch('"([^"]+)"') do
-        paths[#paths + 1] = path
-    end
-    return paths
-end
-
--- "/JsonData/TQ2/Creatures/da_cr_x" -> "/JsonData/TQ2/Creatures/da_cr_x.da_cr_x" (package path plus object name).
-function GameDataDump.objectPath(assetPath)
-    return assetPath .. "." .. assetPath:match("([^/]+)$")
-end
-
--- Value of read(), or nil if a field is missing or unreadable (the dump goes on).
-local function readOr(read)
-    local ok, value = pcall(read)
-    if ok then
-        return value
-    end
-    return nil
-end
-
-local function listOf(array)
-    local list = {}
-    if array ~= nil then
-        array:ForEach(function(_, element) list[#list + 1] = element:get() end)
-    end
-    return list
-end
-
-local function nameOf(object)
-    return object:GetFullName():match("([^%.:]+)$")
-end
-
-local function usable(object)
-    return object ~= nil and readOr(function() return object:IsValid() end) == true
-end
+-- A missing or unreadable field is nil; the dump goes on.
+local readOr = GameObject.read
+local listOf = GameObject.listOf
+local nameOf = GameObject.shortName
+local usable = GameObject.usable
 
 local function text(read)
     local value = readOr(function() return read():ToString() end)
@@ -75,7 +43,7 @@ local function valueRange(range)
 end
 
 local function tagNames(container)
-    local names = readOr(function() return DamageHook.tagNames(container) end)
+    local names = readOr(function() return GameObject.tagNames(container) end)
     if names == nil or #names == 0 then
         return nil
     end
@@ -241,14 +209,11 @@ function GameDataDump.describeItemType(description, tables)
 end
 
 local function writeFile(path, content, log)
-    local file, openError = io.open(path, "w")
-    if file == nil then
-        log("Game data not written: " .. tostring(openError))
-        return false
+    local ok, reason = TextFile.write(path, content)
+    if not ok then
+        log("Game data not written: " .. reason)
     end
-    file:write(content)
-    file:close()
-    return true
+    return ok
 end
 
 local function finish(dump)
@@ -291,23 +256,21 @@ function GameDataDump.start(state, paths, log)
         log("Game data dump already running")
         return false
     end
-    local file = io.open(paths.cache, "r")
-    if file == nil then
+    local cacheText = TextFile.read(paths.cache)
+    if cacheText == nil then
         log("Game data dump: " .. paths.cache .. " not found")
         return false
     end
-    local cacheText = file:read("a")
-    file:close()
     local dump = {
         outputPath = paths.output, pagePath = paths.page, log = log,
         data = { creatures = {}, notLoaded = {}, dropLists = {}, globalDropLists = {}, itemTypes = {}, affixTables = {} },
     }
-    local creaturePaths = GameDataDump.pathsOfClass(cacheText, CREATURE_CLASS)
+    local creaturePaths = AssetList.pathsOfClass(cacheText, CREATURE_CLASS)
     log(string.format("Game data dump started: %d creature templates", #creaturePaths))
     state.job = BatchJob.start(creaturePaths, {
         name = "Game data dump", batchSize = BATCH_SIZE, delayMs = BATCH_DELAY_MS, log = log,
         each = function(path)
-            local ok, template = pcall(LoadAsset, GameDataDump.objectPath(path))
+            local ok, template = pcall(LoadAsset, AssetList.objectPath(path))
             if ok and usable(template) then
                 dump.data.creatures[#dump.data.creatures + 1] =
                     GameDataDump.describeCreature(template, path, dump.data.dropLists)

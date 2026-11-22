@@ -6,7 +6,7 @@ local EDITABLE_KEYS = {
     "XpMultiplier", "GoldMultiplier", "LootBonus", "FreeCrafting", "AnvilAnywhere", "MoveSpeed", "GameSpeed", "DamageMeter",
     "DamageMeterPosition", "DamageMeterGraph", "DamageMeterTypes", "DamageMeterSkills",
     "AutoPickupMaterials", "AutoPickupPotions", "AutoPickupSocketables", "AutoPickupEquipment",
-    "LootFilter", "AttributePointsPerLevel", "ActivePointsPerLevel", "PassivePointsPerLevel", "MasteryPointsPerLevel",
+    "LootFilter", "LootFilterUpgradesOnly", "AttributePointsPerLevel", "ActivePointsPerLevel", "PassivePointsPerLevel", "MasteryPointsPerLevel",
 }
 
 -- Settings whose value is an index into a list from config (setting -> list name).
@@ -31,6 +31,7 @@ local LIST_SETTINGS = {
     AutoPickupSocketables = "OnOffOptions",
     AutoPickupEquipment = "EquipmentRarityThresholds",
     LootFilter = "OnOffOptions",
+    LootFilterUpgradesOnly = "OnOffOptions",
 }
 
 -- Whole-number settings with a range (setting -> config keys for min and max).

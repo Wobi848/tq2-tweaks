@@ -3,6 +3,7 @@
 -- Only hits by the player's abilities (incl. summons) on AI characters count. This hook runs for every hit, so it only reads and records; all
 -- statistics are computed in the display loop.
 local DamageMeter = require("damage_meter")
+local GameObject = require("game_object")
 
 local DamageHook = {}
 
@@ -26,20 +27,6 @@ function DamageHook.typeName(tag)
         return nil
     end
     return spaced(name:match("([^%.]+)$"))
-end
-
--- Names of the tags in a gameplay tag container (collected first, no work inside the engine loop).
-function DamageHook.tagNames(container)
-    local tags = {}
-    container.GameplayTags:ForEach(function(_, element) tags[#tags + 1] = element:get() end)
-    local names = {}
-    for _, tag in ipairs(tags) do
-        local name = tag.TagName:ToString()
-        if name ~= nil and name ~= "" and name ~= "None" then
-            names[#names + 1] = name
-        end
-    end
-    return names
 end
 
 local DESCRIPTION_PREFIX = "GrimAbilitySystem.Description."
@@ -90,7 +77,7 @@ end
 function DamageHook.register(meter, isEnabled, now, log)
     -- Ability tag names of a hit; an empty list if unreadable.
     local function readTags(effectContext)
-        local ok, names = pcall(function() return DamageHook.tagNames(effectContext:get().AbilityTags) end)
+        local ok, names = pcall(function() return GameObject.tagNames(effectContext:get().AbilityTags) end)
         return ok and names or {}
     end
     local function onDamage(character, effectContext, damageContext)

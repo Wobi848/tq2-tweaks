@@ -1,7 +1,9 @@
 -- Gear dump (written together with the affix dump, F9): the player's equipped items and the items in the player's
 -- inventories (bags, stash) with type, rarity, item level and every affix with its tier (Level) and roll quality
 -- (the scales of its effects), as JSON in the mod folder. Groundwork for upgrade advice. Only reads.
+local GameObject = require("game_object")
 local JsonText = require("json_text")
+local TextFile = require("text_file")
 
 local GearDump = {}
 
@@ -10,27 +12,10 @@ local INVENTORY_CLASS = "TQ2Inventory"
 local MAX_OUTER_DEPTH = 4
 local AFFIX_CATEGORIES = { [0] = "base", [1] = "implicit", [2] = "random" }
 
-local function readOr(read)
-    local ok, value = pcall(read)
-    if ok then
-        return value
-    end
-    return nil
-end
-
-local function listOf(array)
-    local list = {}
-    array:ForEach(function(_, element) list[#list + 1] = element:get() end)
-    return list
-end
-
-local function nameOf(object)
-    return object:GetFullName():match("([^%.:]+)$")
-end
-
-local function usable(object)
-    return object ~= nil and readOr(function() return object:IsValid() end) == true
-end
+local readOr = GameObject.read
+local listOf = GameObject.listOf
+local nameOf = GameObject.shortName
+local usable = GameObject.usable
 
 local function describeAffix(affixInstance)
     local scales = {}
@@ -76,21 +61,6 @@ function GearDump.containerItems(container)
     return items
 end
 
-local function belongsTo(object, owner)
-    local ownerAddress = owner:GetAddress()
-    local outer = readOr(function() return object:GetOuter() end)
-    for _ = 1, MAX_OUTER_DEPTH do
-        if not usable(outer) then
-            return false
-        end
-        if outer:GetAddress() == ownerAddress then
-            return true
-        end
-        outer = readOr(function() return outer:GetOuter() end)
-    end
-    return false
-end
-
 -- Equipment and the player's inventories, each { name, items }.
 function GearDump.collect(playerState)
     local result = { equipment = {}, inventories = {} }
@@ -99,7 +69,7 @@ function GearDump.collect(playerState)
         result.equipment = GearDump.containerItems(equipment)
     end
     for _, inventory in ipairs(FindAllOf(INVENTORY_CLASS) or {}) do
-        if usable(inventory) and belongsTo(inventory, playerState) then
+        if usable(inventory) and GameObject.isBelow(inventory, playerState:GetAddress(), MAX_OUTER_DEPTH) then
             result.inventories[#result.inventories + 1] = { name = nameOf(inventory),
                                                             items = GearDump.containerItems(inventory) }
         end
@@ -114,13 +84,11 @@ function GearDump.write(path, playerState, log)
         return
     end
     local gear = GearDump.collect(playerState)
-    local file, openError = io.open(path, "w")
-    if file == nil then
-        log("Gear dump not written: " .. tostring(openError))
+    local ok, reason = TextFile.write(path, JsonText.encode(gear) .. "\n")
+    if not ok then
+        log("Gear dump not written: " .. reason)
         return
     end
-    file:write(JsonText.encode(gear), "\n")
-    file:close()
     local carried = 0
     for _, inventory in ipairs(gear.inventories) do
         carried = carried + #inventory.items

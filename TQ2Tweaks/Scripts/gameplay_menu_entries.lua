@@ -55,6 +55,7 @@ function GameplayMenuEntries.create(settings)
         end
     end
     entries[#entries + 1] = listEntry(settings, "Loot filter (loot_filter.html)", "LootFilter")
+    entries[#entries + 1] = listEntry(settings, "   only upgrades over worn gear", "LootFilterUpgradesOnly")
     return entries
 end
 
