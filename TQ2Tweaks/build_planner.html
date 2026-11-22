@@ -1293,7 +1293,8 @@ function update() {
 
 if (!DATA) {
   document.getElementById("boardFrame").innerHTML = `<div class="empty-board"><p>build_data.js is missing.</p>
-    <p>Run <code>python3 tools/build_data.py</code> after a mega dump.</p></div>`;
+    <p>Use the online planner: <a href="https://wobi848.github.io/tq2-tweaks/build_planner.html">wobi848.github.io/tq2-tweaks/build_planner.html</a>
+    (it loads your character.json too), or run <code>python3 tools/build_data.py</code> after a mega dump.</p></div>`;
 } else {
   const version = DATA.version || {};
   document.getElementById("version").innerHTML = `Game data <b>${escapeHtml((version.game || "?").split("-")[0])}</b>` +

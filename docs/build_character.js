@@ -123,6 +123,15 @@ function gearTotals() {
   return [...sums.entries()].map(([phrase, value]) => ({ phrase, value })).sort((a, b) => b.value - a.value);
 }
 
+// The game's own computed values of the loaded character, as exported: [{ set, values: [[name, value]] }].
+function gameAttributeGroups() {
+  const sets = (build.character && build.character.gameAttributes) || {};
+  return Object.entries(sets).map(([set, values]) => ({
+    set: set.replace(/^(Grim|TQ2)(AttributeSet|Character)?/, "").replace(/Set$/, "") || set,
+    values: Object.entries(values || {}).filter(([, value]) => Number.isFinite(value)).sort(([a], [b]) => a.localeCompare(b)),
+  })).filter(group => group.values.length);
+}
+
 // ---- Import from the game (character.json, written by the mod with Shift+F9) ---------------------------------------
 
 // The planner build of an exported character; unknown entries are left to sanitizeBuild.
@@ -159,7 +168,8 @@ function buildFromCharacter(character) {
                        mastery: spent.mastery + (unspent.mastery || 0), attribute: character.grantedAttributePoints };
   const attributes = character.attributes || {};
   target.attributes = {};
-  target.character = { initial: {}, extra: {}, gear: character.equipment || [], extraPoints: {} };
+  target.character = { initial: {}, extra: {}, gear: character.equipment || [], extraPoints: {},
+                       gameAttributes: character.gameAttributes || {} };
   for (const [kind, total] of Object.entries(gameTotals)) {
     if (Number.isFinite(total)) target.character.extraPoints[kind] = total - levelPoints(kind, target.level);
   }

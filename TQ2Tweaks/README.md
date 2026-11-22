@@ -54,6 +54,13 @@ the folder `TQ2Tweaks`. Online data pages (monsters & drops, item affixes, loot 
    Not needed on Windows.
 5. Start the game and load a character.
 
+### Updating from 1.0.0 (folder ShadeHud)
+
+From 2.0.0 the mod folder is called `TQ2Tweaks`. Copy your `user_settings.lua` and `loot_filter.lua` from
+`Mods\ShadeHud` into the new `Mods\TQ2Tweaks`, then delete the folder `ShadeHud` and replace the line `ShadeHud : 1` in
+`mods.txt` (and `mods.json`) with `TQ2Tweaks : 1`. Keys changed too: F7 caravan (stash), F8 damage details, F9 meter
+reset, Shift+F9 dumps.
+
 ## In-game settings (F5)
 
 **F5** opens a menu in the middle of the screen. Without a Spirit character a preview of the shade display is
