@@ -3,7 +3,7 @@ local Settings = {}
 
 local EDITABLE_KEYS = {
     "OffsetX", "OffsetY", "Scale", "ColorPreset", "TextColorPreset", "DisplayMode",
-    "XpMultiplier", "GoldMultiplier", "LootBonus", "FreeCrafting", "AnvilAnywhere", "MoveSpeed", "GameSpeed", "DamageMeter",
+    "XpMultiplier", "GoldMultiplier", "LootBonus", "FreeCrafting", "AnvilAnywhere", "CaravanAnywhere", "MoveSpeed", "GameSpeed", "DamageMeter",
     "DamageMeterPosition", "DamageMeterGraph", "DamageMeterTypes", "DamageMeterSkills",
     "AutoPickupMaterials", "AutoPickupPotions", "AutoPickupSocketables", "AutoPickupEquipment",
     "LootFilter", "LootFilterUpgradesOnly", "AttributePointsPerLevel", "ActivePointsPerLevel", "PassivePointsPerLevel", "MasteryPointsPerLevel",
@@ -19,6 +19,7 @@ local LIST_SETTINGS = {
     LootBonus = "LootBonuses",
     FreeCrafting = "OnOffOptions",
     AnvilAnywhere = "OnOffOptions",
+    CaravanAnywhere = "OnOffOptions",
     MoveSpeed = "MoveSpeeds",
     GameSpeed = "GameSpeeds",
     DamageMeter = "OnOffOptions",

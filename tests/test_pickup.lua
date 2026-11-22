@@ -70,6 +70,32 @@ press("F6")
 hooks["/Script/TQ2Gameplay.TQ2PlayerCharacter:OnCraftingUIClosed"].after(param(anvilCharacter))
 check("closing with Esc clears the access", anvil.access == nil and anvil.opened == 2)
 
+-- Caravan anywhere: F4 opens the caravan for the player (or the caravan it already reaches), closing clears the access.
+local caravan = { access = "none", opened = 0, closedByGame = 0, viewModel = 0 }
+local caravanCharacter = {
+    IsValid = function() return true end,
+    PlayerState = { IsValid = function() return true end, GetOrCreateCaravanViewModel = function() caravan.viewModel = caravan.viewModel + 1 end },
+    GetCaravanAccess = function() return nil end,
+    SetCaravanAccess = function(_, access) caravan.access = access end,
+    ForceNetUpdate = function() end,
+    OnCaravanInventoryOpened = function(_, access) caravan.opened = caravan.opened + 1; caravan.openedFor = access end,
+    OnCaravanInventoryClosed = function() caravan.closedByGame = caravan.closedByGame + 1 end,
+}
+playerPawn = caravanCharacter
+press("F4")
+check("F4 opens the caravan: view model prepared, player is its own access", caravan.opened == 1 and caravan.viewModel == 1
+    and caravan.access == caravanCharacter and caravan.openedFor == caravanCharacter)
+press("F4")
+check("F4 again closes the caravan and clears the access", caravan.closedByGame == 1 and caravan.access == nil)
+press("F4")
+hooks["/Script/TQ2Gameplay.TQ2PlayerCharacter:OnCaravanInventoryClosed"].after(param(caravanCharacter))
+check("closing the caravan with Esc clears the access", caravan.access == nil and caravan.opened == 2)
+local nearCaravan = { IsValid = function() return true end }
+caravanCharacter.GetCaravanAccess = function() return nearCaravan end
+press("F4")
+check("next to a caravan it opens that one", caravan.openedFor == nearCaravan)
+press("F4")
+
 -- Equipment pickup by rarity: threshold, range, one try per item, items not filled yet wait.
 local EquipmentPickup = require("equipment_pickup")
 check("type name from the ground item", EquipmentPickup.typeNameOf(groundItem("da_sword_01_WorldItem_2147", 2, 0)) == "da_sword_01")

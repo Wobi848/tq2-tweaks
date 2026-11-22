@@ -28,6 +28,7 @@ local WorldItems = require("world_items")
 local Player = require("player")
 local Cutscene = require("cutscene")
 local CraftingAnywhere = require("crafting_anywhere")
+local CaravanAnywhere = require("caravan_anywhere")
 local DevCommands = require("dev_commands")
 local DumpKeys = require("dump_keys")
 local LootFilterFile = require("loot_filter_file")
@@ -369,24 +370,29 @@ end
 
 everyMs(config.GameplayIntervalMs, "Hook registration", registerNeededHooks)
 
--- Anvil anywhere: the key callback only hands the work to the game thread.
-local logAnvilError = dedupedLogger()
-local anvilKey = Key[config.AnvilKey]
-if anvilKey == nil then
-    log("Unknown AnvilKey '" .. tostring(config.AnvilKey) .. "', anvil anywhere not available")
-else
-    RegisterKeyBind(anvilKey, function()
-        if not Settings.selected(settings, "AnvilAnywhere").Enabled then
+-- Anvil and caravan anywhere: a key opens the window if its menu setting is on; the key callback only hands the work
+-- to the game thread.
+local function bindWindowKey(keySetting, enabledSetting, name, toggle)
+    local key = Key[config[keySetting]]
+    if key == nil then
+        log("Unknown " .. keySetting .. " '" .. tostring(config[keySetting]) .. "', " .. name .. " not available")
+        return
+    end
+    local logError = dedupedLogger()
+    RegisterKeyBind(key, function()
+        if not Settings.selected(settings, enabledSetting).Enabled then
             return
         end
         ExecuteInGameThread(function()
-            local ok, err = pcall(CraftingAnywhere.toggle)
+            local ok, err = pcall(toggle)
             if not ok then
-                logAnvilError("Anvil error: " .. tostring(err))
+                logError(name .. " error: " .. tostring(err))
             end
         end)
     end)
 end
+bindWindowKey("AnvilKey", "AnvilAnywhere", "Anvil anywhere", CraftingAnywhere.toggle)
+bindWindowKey("CaravanKey", "CaravanAnywhere", "Caravan anywhere", CaravanAnywhere.toggle)
 
 -- Damage meter reset: only clears Lua state, so it can run directly in the key callback.
 local resetKey = Key[config.DamageMeterResetKey]

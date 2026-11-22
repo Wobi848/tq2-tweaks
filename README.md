@@ -26,6 +26,7 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
 | Auto pickup by kind | `auto_pickup.lua` | yes |
 | Auto pickup of equipment by rarity | `equipment_pickup.lua`, `world_items.lua` | yes |
 | Anvil anywhere (F6) | `crafting_anywhere.lua` | yes |
+| Caravan anywhere (F4) | `caravan_anywhere.lua` | yes |
 | Hiding during cutscenes | `cutscene.lua` | no |
 | Damage meter with graph, damage types, skills | `damage_meter.lua`, `damage_hook.lua`, `damage_meter_widget.lua` | yes |
 | Damage detail window (F7) | `damage_detail_widget.lua` | yes |
@@ -111,6 +112,10 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
 - **Anvil anywhere**: technique from "CraftnStash", own code. The player gets a `TQ2CraftingComponent` if needed
   (`AddComponentByClass`), becomes its own crafting access (`SetCraftingAccess`), then `OnCraftingUIOpened`.
   Closing by key or Esc (hook on `OnCraftingUIClosed`) clears the access again.
+- **Caravan anywhere** (the shared stash): same technique from "CraftnStash", own code. `GetOrCreateCaravanViewModel` on
+  the player state, the current caravan access (or the player itself) becomes the access (`SetCaravanAccess`), then
+  `OnCaravanInventoryOpened`; key or Esc (hook on `OnCaravanInventoryClosed`) clears it. Both keys share
+  `bindWindowKey` in `main.lua`.
 - **Damage meter**: hook on `TQ2Character:Multicast_HandleDamageReceived_*` (runs for every hit on every
   character). It only reads damage, crit, strongest damage type (`HighestDamageType.TagName`, last part as name) and
   the ability tags, then calls `DamageMeter.record`; errors are caught and logged once. Everything else (rolling DPS

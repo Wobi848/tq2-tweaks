@@ -280,7 +280,7 @@ check("level change: rebuilt on the next loop", menuWidget() ~= menuBeforeLoad a
     and last(playerLayerWidgets("Border")) ~= meterBeforeLoad)
 
 press("PAGE_UP") -- back to the Items tab
-for _ = 1, 5 do press("DOWN_ARROW") end -- anvil row, then the auto pickup rows
+for _ = 1, 6 do press("DOWN_ARROW") end -- anvil and caravan rows, then the auto pickup rows
 tick()
 check("auto pickup section in the menu", menuLines():match("AUTO%-PICKUP") and menuLines():match("> Equipment from") ~= nil)
 press("DOWN_ARROW")

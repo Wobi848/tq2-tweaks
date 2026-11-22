@@ -38,6 +38,7 @@ function GameplayMenuEntries.create(settings)
         { header = "Crafting" },
         listEntry(settings, "Free", "FreeCrafting"),
         listEntry(settings, "Anvil anywhere (" .. settings.config.AnvilKey .. ")", "AnvilAnywhere"),
+        listEntry(settings, "Caravan anywhere (" .. settings.config.CaravanKey .. ")", "CaravanAnywhere"),
         { header = "Damage meter" },
         listEntry(settings, string.format("Show (%s reset, %s details)", settings.config.DamageMeterResetKey,
             settings.config.DamageDetailKey), "DamageMeter"),

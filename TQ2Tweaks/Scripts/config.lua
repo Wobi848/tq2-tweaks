@@ -75,6 +75,9 @@ return {
     -- Open the anvil window anywhere with this key (name from the UE4SS key list); switchable in the menu.
     AnvilAnywhere = 2,
     AnvilKey = "F6",
+    -- Open the caravan (shared stash) anywhere with this key; switchable in the menu.
+    CaravanAnywhere = 2,
+    CaravanKey = "F4",
     OnOffOptions = {
         { Name = "Off", Enabled = false },
         { Name = "On", Enabled = true },

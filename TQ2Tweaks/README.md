@@ -74,7 +74,7 @@ Settings:
 - **Speed:** movement speed x1 to x2, game speed x1 to x3 (everything runs faster, enemies too)
 - **Points per level:** attribute, active skill, passive skill and mastery points (for future level ups)
 - **Crafting:** free crafting on/off (all crafting costs 0); **anvil anywhere**: F6 opens the blacksmith window
-  anywhere (F6 again or Esc closes it)
+  anywhere (F6 again or Esc closes it); **caravan anywhere**: F4 opens your caravan (the shared stash) anywhere
 - **Auto pickup:** crafting materials, potions, charms & relics, each on/off – picked up automatically like gold;
   **equipment from** a chosen rarity (Off, Common … Legendary), same range as gold, without the flying animation;
   **loot filter**: picks up equipment that matches one of your loot filter rules (see below)
