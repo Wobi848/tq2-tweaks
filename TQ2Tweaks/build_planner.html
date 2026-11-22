@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build Planner</title>
+<!-- TQ2 Tweaks build planner, styled after the game's mastery screen with a Path of Building style overview: two
+     masteries, skill and passive points against a level's budget, modifiers within the skill's capacity, feats, with the
+     game's own texts. Reads build_data.js (tools/build_data.py, from the mega dump). Offline, no libraries. The build
+     lives in the page address, so a link restores it. -->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #17130e; --panel: #151b26; --panel-2: #1c2433; --gold: #c9a463; --gold-dim: #7d6640;
+    --text: #e9dfc8; --muted: #a2967e; --line: #3a3326; --warn: #e0a85a; --bad: #e07a6a;
+    --mastery: #4a6379;
+    --serif: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  }
+  * { box-sizing: border-box; scrollbar-color: #5a4a30 #120f0b; }
+  [hidden] { display: none !important; }
+  body { margin: 0; min-height: 100vh; color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: radial-gradient(ellipse at 50% 0%, #2a2218 0%, var(--bg) 60%) fixed; }
+  button { font: inherit; color: inherit; }
+  button:focus-visible, textarea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .caps { font-family: var(--serif); font-variant: small-caps; letter-spacing: .08em; }
+
+  /* Top bar, like the game's header row */
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center;
+         padding: 10px 20px; background: linear-gradient(#211a12, #17120c); border-bottom: 1px solid var(--gold-dim); }
+  .bar h1 { margin: 0; font-size: 22px; color: var(--gold); font-weight: 600; }
+  .points { display: flex; flex-wrap: wrap; gap: 6px 22px; font-family: var(--serif); font-variant: small-caps; letter-spacing: .05em; font-size: 16px; }
+  .points span b { font-variant-numeric: tabular-nums; color: var(--gold); margin-left: 6px; font-family: system-ui, sans-serif; }
+  .points span.over b { color: var(--bad); }
+  .points small { color: var(--muted); font: 12px system-ui, sans-serif; margin-left: 6px; }
+  .bar .actions { margin-left: auto; display: flex; gap: 8px; }
+  .btn { border: 1px solid var(--gold-dim); background: rgba(201, 164, 99, .06); color: var(--gold); border-radius: 4px;
+         padding: 5px 12px; cursor: pointer; font-family: var(--serif); letter-spacing: .04em; }
+  .btn:hover { background: rgba(201, 164, 99, .16); border-color: var(--gold); }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--gold-dim); border-radius: 4px; background: #120f0b; vertical-align: middle; }
+  .stepper button { border: 0; background: none; width: 28px; height: 28px; cursor: pointer; color: var(--gold); font-size: 17px; }
+  .stepper button:hover:not(:disabled) { background: rgba(201, 164, 99, .15); }
+  .stepper button:disabled { opacity: .3; cursor: default; }
+  .stepper output { min-width: 48px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* Mastery tabs */
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; padding: 14px 16px 0; }
+  .tab { border: 0; background: none; cursor: pointer; padding: 6px 22px; font-family: var(--serif); font-size: 22px;
+         font-variant: small-caps; letter-spacing: .1em; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); }
+  .tab.on { color: var(--text); border-bottom-color: var(--tab-color, var(--gold)); }
+  .tab.add { font-size: 16px; color: var(--gold); }
+
+  /* Workspace: overview | tree | tooltip */
+  .workspace { display: grid; grid-template-columns: 250px minmax(0, 1fr) 390px; gap: 16px; padding: 14px 16px 30px;
+               max-width: 1720px; margin: 0 auto; align-items: start; }
+  @media (max-width: 1280px) { .workspace { grid-template-columns: minmax(0, 1fr) 370px; } .overview { grid-column: 1 / -1; order: 3; } }
+  @media (max-width: 880px) { .workspace { grid-template-columns: 1fr; } .tip { position: static; max-height: none; } }
+  .frame { border: 1px solid var(--gold-dim); border-radius: 6px; background: rgba(12, 10, 8, .55);
+           box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), 0 6px 20px rgba(0, 0, 0, .35); }
+  .frame-title { margin: 0; padding: 9px 14px; border-bottom: 1px solid var(--line); color: var(--gold); font-size: 16px; font-weight: 400; }
+
+  /* Overview, Path of Building style */
+  .overview section { padding: 8px 14px; border-bottom: 1px solid var(--line); }
+  .overview h3 { margin: 4px 0 6px; font-size: 15px; font-weight: 400; color: var(--ov-color, var(--text)); filter: brightness(1.5); }
+  .overview ul { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+  .overview li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; cursor: pointer; }
+  .overview li:hover { color: var(--gold); }
+  .overview li b { font-variant-numeric: tabular-nums; color: var(--gold); }
+  .overview li.extra { display: block; font-size: 12px; color: var(--muted); margin: -2px 0 3px 10px; cursor: default; }
+  .overview li.extra:hover { color: var(--muted); }
+  .overview .none { color: var(--muted); font-size: 13px; cursor: default; }
+  .overview textarea { width: 100%; min-height: 70px; background: #0f0c09; color: var(--text); border: 1px solid var(--line);
+                       border-radius: 4px; padding: 6px; font: 13px/1.4 system-ui, sans-serif; resize: vertical; }
+
+  /* Tree board: tiers bottom-up, skills left, passives right, mastery bar at the side */
+  .board { display: grid; grid-template-columns: 70px 1fr; min-height: 560px;
+           background: radial-gradient(circle at 60% 55%, rgba(201, 164, 99, .07), transparent 60%), rgba(28, 22, 15, .75); }
+  .mastery-bar { display: flex; flex-direction: column; align-items: center; border-right: 1px solid var(--line); padding: 18px 0 10px; }
+  .mastery-bar .track { flex: 1; width: 8px; border-radius: 4px; background: #0c0a08; border: 1px solid var(--gold-dim);
+                        position: relative; margin: 6px 0 22px; min-height: 300px; }
+  .mastery-bar .fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px;
+                       background: linear-gradient(to top, var(--mastery), color-mix(in srgb, var(--mastery) 55%, white)); }
+  .mastery-bar .mark { position: absolute; left: 50%; transform: translate(-50%, 50%); width: 30px; height: 30px; border-radius: 50%;
+                       background: #1a150f; border: 1px solid var(--gold-dim); color: var(--muted); display: grid; place-items: center;
+                       font: 12px var(--serif); }
+  .mastery-bar .mark.reached { border-color: var(--gold); color: var(--gold); }
+  .mastery-bar .level { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .mastery-bar .level output { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font: 600 18px var(--serif);
+                               background: radial-gradient(circle, color-mix(in srgb, var(--mastery) 70%, black), #0d0b08);
+                               border: 2px solid var(--gold); }
+  .mastery-bar .level button { width: 28px; height: 22px; border: 1px solid var(--gold-dim); background: #120f0b; color: var(--gold);
+                               border-radius: 4px; cursor: pointer; line-height: 1; }
+  .mastery-bar .level button:disabled { opacity: .3; cursor: default; }
+  .tiers { display: flex; flex-direction: column-reverse; }
+  .tier { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; padding: 14px 14px 10px;
+          border-top: 1px solid rgba(201, 164, 99, .12); position: relative; }
+  .tier:last-child { border-top: 0; }
+  .tier-label { position: absolute; left: 14px; top: 4px; font-size: 12px; color: var(--muted); }
+  .tier.locked .nodes { opacity: .38; filter: grayscale(.7); }
+  .tier.locked .tier-label { color: var(--warn); }
+  .nodes { display: flex; flex-wrap: wrap; gap: 14px 10px; align-items: flex-start; padding-top: 14px; }
+  .passives { justify-content: flex-end; }
+
+  .node { position: relative; width: 76px; border: 0; background: none; padding: 0; cursor: pointer; text-align: center;
+          display: flex; flex-direction: column; align-items: center; }
+  .node .face { width: 58px; height: 58px; display: grid; place-items: center; font: 600 19px var(--serif); color: #f3ead6;
+                background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--mastery) 80%, white 20%), color-mix(in srgb, var(--mastery) 50%, black));
+                border: 2px solid var(--gold-dim); box-shadow: 0 2px 6px rgba(0, 0, 0, .6); transition: box-shadow .12s, border-color .12s; }
+  .node.active .face { border-radius: 18% 18% 50% 50% / 18% 18% 42% 42%; }
+  .node.passive .face { transform: rotate(45deg) scale(.82); border-radius: 6px; }
+  .node.passive .face span { transform: rotate(-45deg); }
+  .node .badge { margin-top: -10px; min-width: 26px; padding: 0 6px; height: 20px; border-radius: 4px; font: 600 12px/18px system-ui, sans-serif;
+                 background: #0d0b08; border: 1px solid var(--gold-dim); color: var(--muted); font-variant-numeric: tabular-nums; position: relative; }
+  .node .name { font-size: 11.5px; line-height: 1.2; color: var(--muted); margin-top: 4px; max-width: 76px; hyphens: auto;
+                overflow-wrap: break-word; }
+  .node.invested .face { border-color: var(--gold); }
+  .node.invested .badge { color: var(--gold); border-color: var(--gold); }
+  .node.invested .name { color: var(--text); }
+  .node:not(.invested) .face { filter: saturate(.4) brightness(.75); }
+  .node.selected .face { box-shadow: 0 0 0 3px rgba(201, 164, 99, .35), 0 0 18px rgba(201, 164, 99, .45); border-color: var(--gold); filter: none; }
+  .node:hover .face { filter: none; border-color: var(--gold); }
+  .empty-board { padding: 70px 24px; text-align: center; color: var(--muted); }
+
+  /* Tooltip panel, like the game's skill tooltip */
+  .tip { position: sticky; top: 64px; max-height: calc(100vh - 80px); overflow: auto;
+         background: linear-gradient(var(--panel-2), var(--panel)); border-color: #6d5a38; }
+  .tip-head { text-align: center; padding: 14px 16px 10px; border-bottom: 1px solid #3a4152; }
+  .tip-head h2 { margin: 0; font: 600 22px var(--serif); font-variant: small-caps; letter-spacing: .06em; color: #8fb6e0; }
+  .tip-head .sub { margin-top: 4px; font-size: 13.5px; color: #d2c6ac; }
+  .tip-head .sub u { text-decoration-color: rgba(210, 198, 172, .4); }
+  .tip-body { padding: 12px 16px 16px; }
+  .stats { border: 1px solid #3a4152; border-radius: 10px; margin-bottom: 4px; }
+  .stats div { display: flex; justify-content: space-between; padding: 6px 12px; border-top: 1px solid #2c3344; font-size: 14px; }
+  .stats div:first-child { border-top: 0; }
+  .stats b { color: #fff; }
+  .invest { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 12px; }
+  .desc { white-space: pre-line; border: 1px solid #3a4152; border-radius: 10px; padding: 10px 12px; font-size: 14px; color: #e2dccd; }
+  .desc .num, .mod-text .num { font-weight: 700; color: #fff; }
+  .section-title { text-align: center; color: #c9b58a; font: 15px var(--serif); font-variant: small-caps; letter-spacing: .08em; margin: 16px 0 8px; }
+  .slots { display: flex; justify-content: center; gap: 8px; }
+  .slot { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; border: 2px solid #7d6640;
+          background: radial-gradient(circle, #2b2a26, #121110); font: 600 13px var(--serif); color: #8a7a5a; }
+  .slot.on { border-color: var(--gold); color: #fff; background: radial-gradient(circle, color-mix(in srgb, var(--mastery) 80%, white 10%), #10141c); }
+  .diamonds { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin: 12px 0 4px; }
+  .diamond { width: 24px; height: 24px; display: grid; place-items: center; font-size: 10.5px; color: #9aa2ae; position: relative; }
+  .diamond::before { content: ""; position: absolute; inset: 4px; transform: rotate(45deg); border: 1px solid #556070; background: #10141c; }
+  .diamond span { position: relative; }
+  .diamond.open::before { border-color: #8fb6e0; }
+  .diamond.used::before { background: #8fb6e0; border-color: #cfe3f7; }
+  .diamond.bonus::before { border-style: dashed; }
+  .cap-line { text-align: center; font-size: 13px; color: #c7bfae; }
+  .cap-line.unknown { color: var(--warn); }
+  .mod-list { list-style: none; margin: 10px 0 0; padding: 0; }
+  .mod { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 10px; border-radius: 8px; margin-top: 6px;
+         border: 1px solid #2f3646; background: rgba(255, 255, 255, .02); }
+  .mod.on { border-color: #8fb6e0; background: rgba(143, 182, 224, .09); }
+  .mod.blocked { opacity: .5; }
+  .mod-name { font-weight: 600; }
+  .mod-meta { font-size: 12px; color: #9ea6b3; }
+  .mod-text { grid-column: 1 / -1; font-size: 13.5px; color: #d9d2c2; white-space: pre-line; }
+  .why { grid-column: 1 / -1; font-size: 12px; color: var(--warn); }
+  .feats { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .feat { border: 1px solid #556070; background: #10141c; border-radius: 99px; padding: 5px 12px; cursor: pointer; font-size: 13.5px; }
+  .feat.on { border-color: var(--gold); color: var(--gold); background: rgba(201, 164, 99, .1); }
+  .feat:disabled { opacity: .4; cursor: default; }
+  .feat-text { font-size: 13px; color: #d9d2c2; margin: 8px 0 0; }
+  .values { list-style: none; margin: 0; padding: 0; border: 1px solid #3a4152; border-radius: 10px; }
+  .values li { display: flex; justify-content: space-between; padding: 6px 12px; border-top: 1px solid #2c3344; font-size: 14px; }
+  .values li:first-child { border-top: 0; }
+  .values b { color: #fff; }
+  .muted { color: #9ea6b3; font-size: 13px; text-align: center; }
+
+  /* Mastery picker */
+  dialog { border: 1px solid var(--gold); border-radius: 8px; background: #17130e; color: var(--text); padding: 0; max-width: 760px; width: calc(100% - 32px); }
+  dialog::backdrop { background: rgba(0, 0, 0, .6); }
+  .picker-head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  .picker-head h2 { margin: 0; color: var(--gold); font: 20px var(--serif); font-variant: small-caps; letter-spacing: .08em; }
+  .picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; padding: 16px; }
+  .pick { text-align: left; border: 1px solid var(--line); border-left: 5px solid var(--pick-color); background: rgba(255, 255, 255, .02);
+          border-radius: 6px; padding: 10px 12px; cursor: pointer; }
+  .pick:hover:not(:disabled) { border-color: var(--gold); border-left-color: var(--pick-color); }
+  .pick.chosen { background: rgba(201, 164, 99, .08); border-color: var(--gold-dim); border-left-color: var(--pick-color); }
+  .pick:disabled { opacity: .45; cursor: default; }
+  .pick strong { font: 18px var(--serif); font-variant: small-caps; letter-spacing: .06em; }
+  .pick span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .credits { text-align: center; font-size: 12px; color: var(--muted); padding: 0 16px 24px; }
+  .version { font-size: 12px; color: var(--muted); }
+  .version b { color: var(--text); font-weight: 500; }
+  .search { display: flex; justify-content: center; padding: 10px 16px 0; }
+  .search input { width: min(460px, 100%); padding: 7px 12px; border-radius: 4px; border: 1px solid var(--gold-dim); background: #0f0c09;
+                  color: var(--text); font: inherit; }
+  .search input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .search small { margin-left: 10px; color: var(--muted); align-self: center; font-size: 12.5px; }
+  .tab .hits { font: 12px system-ui, sans-serif; color: var(--gold); margin-left: 6px; vertical-align: super; }
+  .node.match .face { box-shadow: 0 0 0 3px #e9d38b, 0 0 16px rgba(233, 211, 139, .7); filter: none; }
+  .searching .node:not(.match) { opacity: .45; }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 20; background: #2a1d12;
+           border: 1px solid var(--warn); color: #f3dcb6; padding: 8px 16px; border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, .5);
+           font-size: 14px; transition: opacity .2s; }
+  .toast.hide { opacity: 0; pointer-events: none; }
+  .totals li { cursor: default !important; }
+  .totals li:hover { color: inherit !important; }
+  .board-actions { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 7px 14px 10px;
+                   border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+  .link { border: 0; background: none; color: var(--gold); cursor: pointer; padding: 0; font-size: 12.5px; text-decoration: underline; }
+  .tip.preview { border-color: var(--gold); }
+  @media (max-width: 600px) {
+    .bar { padding: 8px 12px; gap: 6px 14px; }
+    .bar h1 { font-size: 18px; }
+    .points { font-size: 14px; gap: 2px 14px; }
+    .bar .actions { margin-left: 0; }
+    .tab { font-size: 18px; padding: 6px 12px; }
+    .board { grid-template-columns: 54px 1fr; }
+    .tier { grid-template-columns: 1fr; }
+    .passives { justify-content: flex-start; }
+    .node { width: 64px; }
+    .node .face { width: 50px; height: 50px; font-size: 16px; }
+    .node .name { max-width: 64px; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div><h1 class="caps">Build Planner</h1><div class="version" id="version"></div></div>
+  <span class="caps">Level <span id="levelStepper"></span></span>
+  <div class="points" id="points"></div>
+  <div class="actions">
+    <button class="btn" id="copyLink" type="button">Copy build link</button>
+    <button class="btn" id="reset" type="button">Start over</button>
+  </div>
+</header>
+<nav class="tabs" id="tabs"></nav>
+<div class="search"><input id="search" type="search" placeholder="Search, e.g. summon damage"
+  aria-label="Search skills, passives and modifiers"><small id="searchInfo"></small></div>
+<div class="workspace">
+  <aside class="frame overview" id="overview"></aside>
+  <section class="frame" id="boardFrame"></section>
+  <aside class="frame tip" id="tip"></aside>
+</div>
+<div class="toast hide" id="toast" role="status" aria-live="polite"></div>
+<p class="credits">Unofficial fan tool. Skill data and texts © THQ Nordic / Grimlore Games, read from the game files.</p>
+<dialog id="picker">
+  <div class="picker-head"><h2>Choose a Mastery</h2><button class="btn" id="pickerClose" type="button">Close</button></div>
+  <div class="picker-grid" id="pickerGrid"></div>
+</dialog>
+<script src="build_data.js"></script>
+<script>
+"use strict";
+const DATA = window.TQ2_BUILD_DATA;
+const RULES = DATA ? DATA.rules : null;
+// Skill points per capacity step as the game answered (call_result.json); null = unknown, then nothing is guessed.
+const CAPACITY_POINTS = RULES && RULES.capacityPoints;
+const STORAGE_KEY = "tq2BuildPlanner";
+const ROMAN = ["I", "II", "III", "IV", "V"];
+const HIDDEN_FLAGS = ["Skill", "DefaultSkill", "Triggered", "DirectUse", "MainSkill", "Active"];
+
+let query = "";
+const masteryById = {};
+const nodeById = {};
+if (DATA) {
+  for (const mastery of DATA.masteries) {
+    masteryById[mastery.id] = mastery;
+    mastery.tiers.forEach((tier, tierIndex) => {
+      for (const skill of tier.actives) nodeById[skill.id] = { kind: "active", node: skill, mastery, tierIndex };
+      for (const passive of tier.passives) nodeById[passive.id] = { kind: "passive", node: passive, mastery, tierIndex };
+    });
+  }
+}
+
+// ---- Build state (kept in the address and, for convenience, in the browser) -------------------------------------
+
+function emptyBuild() {
+  return { level: 55, masteries: [], tab: null, masteryLevel: {}, points: {}, mods: {}, feats: {}, bonus: {},
+           selected: null, notes: "" };
+}
+let build = loadBuild();
+
+function loadBuild() {
+  const fromHash = decodeBuild(location.hash.slice(1));
+  if (fromHash) return fromHash;
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (saved) return Object.assign(emptyBuild(), saved);
+  } catch (error) {
+    console.warn("Saved build not readable:", error);
+  }
+  return emptyBuild();
+}
+
+function decodeBuild(text) {
+  if (!text) return null;
+  try {
+    return Object.assign(emptyBuild(), JSON.parse(decodeURIComponent(escape(atob(text)))));
+  } catch (error) {
+    console.warn("Build link not readable:", error);
+    return null;
+  }
+}
+
+function save() {
+  history.replaceState(null, "", "#" + btoa(unescape(encodeURIComponent(JSON.stringify(build)))));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(build));
+  } catch (error) {
+    console.warn("Build not kept in the browser:", error);
+  }
+}
+
+// ---- Rules -------------------------------------------------------------------------------------------------------
+
+const pointsOf = id => build.points[id] || 0;
+const masteryLevelOf = id => build.masteryLevel[id] || 0;
+const tierUnlocked = (masteryId, tierIndex) => masteryLevelOf(masteryId) >= RULES.tierThresholds[tierIndex];
+const maxPointsOf = entry => entry.kind === "passive" ? entry.node.max : Infinity;
+const chosenMods = skillId => Object.keys(build.mods[skillId] || {});
+const rankOf = (skillId, modId) => (build.mods[skillId] || {})[modId] || 0;
+const usedCapacity = skillId => chosenMods(skillId).reduce((sum, id) => sum + rankOf(skillId, id) * DATA.modifiers[id].capacity, 0);
+
+function capacityOf(skillId) {
+  const bonus = build.bonus[skillId] || 0;
+  if (!CAPACITY_POINTS) return { base: null, bonus };
+  const points = pointsOf(skillId);
+  let steps = 0;
+  while (steps < CAPACITY_POINTS.length && points >= CAPACITY_POINTS[steps]) steps++;
+  return { base: steps ? RULES.capacity[steps - 1] : 0, bonus };
+}
+
+function budget() {
+  const spent = { active: 0, passive: 0 };
+  for (const [id, points] of Object.entries(build.points)) {
+    const entry = nodeById[id];
+    if (entry && build.masteries.includes(entry.mastery.id)) spent[entry.kind] += points;
+  }
+  return {
+    active: { spent: spent.active, total: RULES.activePerLevel * build.level },
+    passive: { spent: spent.passive, total: RULES.passivePerLevel * build.level },
+    mastery: { spent: build.masteries.reduce((sum, id) => sum + masteryLevelOf(id), 0),
+               total: Math.max(0, build.level - RULES.masteryFromLevel + 1) * RULES.masteryPerLevel },
+  };
+}
+
+// Why a modifier cannot get one more rank, or null if it can.
+function blockedReason(skillId, modId) {
+  const modifier = DATA.modifiers[modId];
+  const rank = rankOf(skillId, modId);
+  if (rank >= modifier.max) return null;
+  const chosen = chosenMods(skillId);
+  if (!rank && chosen.length >= RULES.maxModifiers) return `A skill holds at most ${RULES.maxModifiers} modifiers.`;
+  const conflict = chosen.find(id => modifier.blocks.includes(id) || DATA.modifiers[id].blocks.includes(modId));
+  if (conflict) return `Cannot be combined with ${DATA.modifiers[conflict].name}.`;
+  const capacity = capacityOf(skillId);
+  if (capacity.base !== null && usedCapacity(skillId) + modifier.capacity > capacity.base + capacity.bonus) {
+    return "Not enough capacity: put more points into the skill.";
+  }
+  return null;
+}
+
+// Sets the points of a skill or passive like the game allows it; returns why more points are not possible, or null.
+function setPoints(id, value) {
+  const entry = nodeById[id];
+  const current = pointsOf(id);
+  let target = Math.max(0, Math.min(maxPointsOf(entry), value));
+  let reason = null;
+  if (target > current) {
+    if (!tierUnlocked(entry.mastery.id, entry.tierIndex)) {
+      return `Tier ${ROMAN[entry.tierIndex]} of ${entry.mastery.name} needs mastery level ${RULES.tierThresholds[entry.tierIndex]}.`;
+    }
+    const left = budget()[entry.kind];
+    const free = left.total - left.spent;
+    if (free <= 0) return `No ${entry.kind} points left at level ${build.level}.`;
+    if (target - current > free) { target = current + free; reason = `Only ${free} ${entry.kind} point${free === 1 ? "" : "s"} left.`; }
+  }
+  if (target) build.points[id] = target;
+  else delete build.points[id];
+  return reason;
+}
+
+function setMasteryLevel(id, value) {
+  const current = masteryLevelOf(id);
+  const top = RULES.tierThresholds[RULES.tierThresholds.length - 1];
+  let target = Math.max(0, Math.min(top, value));
+  if (target > current) {
+    const divinity = budget().mastery;
+    const free = divinity.total - divinity.spent;
+    if (free <= 0) return `No Divinity left at level ${build.level} (1 per level from level ${RULES.masteryFromLevel}).`;
+    target = Math.min(target, current + free);
+  }
+  build.masteryLevel[id] = target;
+  return null;
+}
+
+let toastTimer = null;
+function toast(message) {
+  if (!message) return;
+  const box = document.getElementById("toast");
+  box.textContent = message;
+  box.classList.remove("hide");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => box.classList.add("hide"), 2600);
+}
+
+// ---- Text --------------------------------------------------------------------------------------------------------
+
+const escapeHtml = text => String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const formatNumber = value => Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
+const initials = name => name.split(/[\s-]+/).filter(Boolean).slice(0, 2).map(word => word[0]).join("").toUpperCase();
+
+// Game text with {placeholders} filled from values[name][levelIndex]; values the game scales at runtime show "…".
+function fillText(text, values, levelIndex, level) {
+  const shown = (text || "").split(/\n\s*\n?Level \{NextLevel\}/)[0];
+  return escapeHtml(shown).replace(/\{([A-Za-z0-9_.]+)\}/g, (match, name) => {
+    if (name === "damage") return "<span class=\"num\">damage</span>";
+    if (name === "CurrentLevel") return `<span class="num">${level}</span>`;
+    const series = values && values[name.split(".").pop()];
+    if (!series) return "<span class=\"num\">…</span>";
+    return `<span class="num">${formatNumber(series[Math.min(series.length - 1, Math.max(0, levelIndex))])}</span>`;
+  });
+}
+
+function formatValue(label, value) {
+  if (/Increased|More|Multiplier/i.test(label) && value > 1 && value < 10) return "+" + formatNumber((value - 1) * 100) + "%";
+  if (/Chance|Resistance|Penetration|Lifesteal/i.test(label) && value > 0 && value < 1) return "+" + formatNumber(value * 100) + "%";
+  return formatNumber(value);
+}
+
+// ---- Search ------------------------------------------------------------------------------------------------------
+
+// Plain text of a node for search: name, game text and, for skills, the names and texts of its modifiers.
+function searchText(entry) {
+  if (!entry.searchText) {
+    const parts = [entry.node.name, entry.node.text || ""];
+    if (entry.kind === "active") parts.push(...entry.node.modifiers.map(id => DATA.modifiers[id].name + " " + DATA.modifiers[id].text));
+    else parts.push(...entry.node.levels.map(level => level.label), ...entry.node.feats.map(feat => feat.name + " " + feat.text));
+    entry.searchText = parts.join(" ").toLowerCase();
+  }
+  return entry.searchText;
+}
+
+function matches(entry) {
+  if (!query) return false;
+  return query.toLowerCase().split(/\s+/).filter(Boolean).every(word => searchText(entry).includes(word));
+}
+
+const hitsIn = masteryId => Object.values(nodeById).filter(entry => entry.mastery.id === masteryId && matches(entry)).length;
+
+// ---- Widgets -----------------------------------------------------------------------------------------------------
+
+function stepper(value, { min, max, label, showMax }, onChange) {
+  const box = document.createElement("span");
+  box.className = "stepper";
+  const minus = document.createElement("button");
+  const plus = document.createElement("button");
+  const out = document.createElement("output");
+  minus.type = plus.type = "button";
+  minus.textContent = "−";
+  plus.textContent = "+";
+  minus.setAttribute("aria-label", "less " + label);
+  plus.setAttribute("aria-label", "more " + label);
+  out.textContent = showMax ? `${value}/${max}` : value;
+  minus.disabled = value <= min;
+  plus.disabled = Number.isFinite(max) && value >= max;
+  minus.addEventListener("click", event => onChange(event.shiftKey ? min : value - 1));
+  plus.addEventListener("click", event => onChange(event.shiftKey && Number.isFinite(max) ? max : value + 1));
+  box.append(minus, out, plus);
+  return box;
+}
+
+// ---- Header, tabs, picker ----------------------------------------------------------------------------------------
+
+function renderBar() {
+  document.getElementById("levelStepper").replaceChildren(stepper(build.level, { min: 1, max: RULES.levelCap, label: "level" }, value => {
+    build.level = value;
+    update();
+  }));
+  const totals = budget();
+  const show = (label, { spent, total }, hint) => `<span class="${spent > total ? "over" : ""}">${label}:<b>${total - spent}</b>` +
+    `<small>${spent} of ${total} used${hint ? " · " + hint : ""}</small></span>`;
+  document.getElementById("points").innerHTML = show("Active Points", totals.active) + show("Passive Points", totals.passive) +
+    show("Divinity", totals.mastery, `from level ${RULES.masteryFromLevel}`);
+}
+
+function renderTabs() {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = "";
+  if (!build.masteries.includes(build.tab)) build.tab = build.masteries[0] || null;
+  for (const id of build.masteries) {
+    const mastery = masteryById[id];
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "tab" + (build.tab === id ? " on" : "");
+    tab.style.setProperty("--tab-color", mastery.accent);
+    tab.textContent = mastery.name;
+    const hits = query ? hitsIn(id) : 0;
+    if (hits) tab.insertAdjacentHTML("beforeend", `<span class="hits">${hits}</span>`);
+    tab.addEventListener("click", () => { build.tab = id; update(); });
+    tabs.append(tab);
+  }
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "tab add";
+  add.textContent = build.masteries.length < 2 ? "+ Choose mastery" : "Change masteries";
+  add.addEventListener("click", openPicker);
+  tabs.append(add);
+}
+
+function openPicker() {
+  const grid = document.getElementById("pickerGrid");
+  grid.innerHTML = "";
+  for (const mastery of DATA.masteries) {
+    const chosen = build.masteries.includes(mastery.id);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pick" + (chosen ? " chosen" : "");
+    button.style.setProperty("--pick-color", mastery.accent);
+    button.disabled = !chosen && build.masteries.length >= 2;
+    button.innerHTML = `<strong>${escapeHtml(mastery.name)}</strong><span>${escapeHtml(mastery.slogan || "")}</span>` +
+      `<span>${chosen ? "Chosen · click to remove" : escapeHtml(mastery.description || "")}</span>`;
+    button.addEventListener("click", () => {
+      if (chosen) build.masteries = build.masteries.filter(id => id !== mastery.id);
+      else { build.masteries.push(mastery.id); build.tab = mastery.id; }
+      update();
+      if (!chosen && build.masteries.length >= 2) document.getElementById("picker").close();
+      else openPicker();
+    });
+    grid.append(button);
+  }
+  const dialog = document.getElementById("picker");
+  if (!dialog.open) dialog.showModal();
+}
+
+// ---- Overview (Path of Building style) ---------------------------------------------------------------------------
+
+function renderOverview() {
+  const box = document.getElementById("overview");
+  box.innerHTML = "<h2 class=\"frame-title caps\">Build Overview</h2>";
+  if (!build.masteries.length) box.insertAdjacentHTML("beforeend", "<section><p class=\"none\">Choose two masteries to start.</p></section>");
+  for (const id of build.masteries) {
+    const mastery = masteryById[id];
+    const section = document.createElement("section");
+    section.style.setProperty("--ov-color", mastery.accent);
+    section.innerHTML = `<h3 class="caps">${escapeHtml(mastery.name)} · mastery level ${masteryLevelOf(id)}</h3>`;
+    const list = document.createElement("ul");
+    const entries = Object.keys(build.points).map(key => nodeById[key]).filter(entry => entry && entry.mastery.id === id)
+      .sort((a, b) => (a.kind === b.kind ? a.tierIndex - b.tierIndex : a.kind === "active" ? -1 : 1));
+    for (const entry of entries) {
+      const item = document.createElement("li");
+      const max = entry.kind === "passive" ? "/" + entry.node.max : "";
+      item.innerHTML = `<span>${entry.kind === "passive" ? "◆ " : ""}${escapeHtml(entry.node.name)}</span><b>${pointsOf(entry.node.id)}${max}</b>`;
+      item.addEventListener("click", () => { build.tab = id; build.selected = entry.node.id; update(); });
+      list.append(item);
+      const extras = entry.kind === "active"
+        ? chosenMods(entry.node.id).map(modId => `${DATA.modifiers[modId].name} ${rankOf(entry.node.id, modId)}`)
+        : (build.feats[entry.node.id] || []).map(index => entry.node.feats[index] && entry.node.feats[index].name).filter(Boolean);
+      if (extras.length) list.insertAdjacentHTML("beforeend", `<li class="extra">${extras.map(escapeHtml).join(" · ")}</li>`);
+    }
+    if (!entries.length) list.innerHTML = "<li class=\"none\">No points yet.</li>";
+    section.append(list);
+    box.append(section);
+  }
+  const totals = passiveTotals();
+  if (totals.length) {
+    const section = document.createElement("section");
+    section.innerHTML = "<h3 class=\"caps\">From passives</h3><ul class=\"totals\">" + totals.map(({ phrase, value }) =>
+      `<li><span>${escapeHtml(phrase)}</span><b>+${formatNumber(value)}%</b></li>`).join("") + "</ul>";
+    box.append(section);
+  }
+  const notes = document.createElement("section");
+  notes.innerHTML = "<h3 class=\"caps\">Notes</h3>";
+  const area = document.createElement("textarea");
+  area.value = build.notes || "";
+  area.placeholder = "Rotation, gear goals, …";
+  area.setAttribute("aria-label", "Build notes");
+  area.addEventListener("input", () => { build.notes = area.value; save(); });
+  notes.append(area);
+  box.append(notes);
+}
+
+// Percent bonuses of all invested passives, summed by what they increase ("Spell Damage"): read from the filled game
+// text, or from the passive's values where the game builds its text from parts not in the text files.
+function passiveTotals() {
+  const sums = new Map();
+  const add = (phrase, value) => {
+    const key = phrase.replace(/^increased /i, "").trim();
+    if (key) sums.set(key, (sums.get(key) || 0) + value);
+  };
+  for (const [id, points] of Object.entries(build.points)) {
+    const entry = nodeById[id];
+    if (!entry || entry.kind !== "passive" || !build.masteries.includes(entry.mastery.id)) continue;
+    const node = entry.node;
+    const text = fillText(node.text, node.values, points - 1, points).replace(/<[^>]*>/g, "");
+    let found = false;
+    for (const line of text.split("\n").map(part => part.trim())) {
+      const match = line.match(/^\+?(\d+(?:\.\d+)?)%\s+(increased .+)$/i);
+      if (match) { add(match[2], Number(match[1])); found = true; }
+    }
+    if (!found) {
+      for (const { label, values } of node.levels) {
+        const value = values[Math.min(values.length, points) - 1];
+        if (/Increased/i.test(label) && value > 1 && value < 10) add(label.replace(/Increased /i, ""), (value - 1) * 100);
+      }
+    }
+  }
+  return [...sums.entries()].map(([phrase, value]) => ({ phrase, value })).sort((a, b) => b.value - a.value);
+}
+
+// ---- Tree board --------------------------------------------------------------------------------------------------
+
+function nodeButton(entry) {
+  const { node, kind } = entry;
+  const points = pointsOf(node.id);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `node ${kind}` + (points ? " invested" : "") + (build.selected === node.id ? " selected" : "") +
+    (matches(entry) ? " match" : "");
+  button.title = `${node.name}\nClick: details · Double-click: +1 · Right-click: −1`;
+  button.innerHTML = `<span class="face"><span>${escapeHtml(initials(node.name))}</span></span>` +
+    `<span class="badge">${points}${kind === "passive" ? "/" + node.max : ""}</span><span class="name">${escapeHtml(node.name)}</span>`;
+  button.addEventListener("click", () => {
+    build.selected = node.id;
+    update();
+    // On narrow screens the tooltip sits below the tree.
+    if (window.matchMedia("(max-width: 880px)").matches) document.getElementById("tip").scrollIntoView({ behavior: "smooth" });
+  });
+  button.addEventListener("mouseenter", () => renderTip(node.id));
+  button.addEventListener("mouseleave", () => renderTip());
+  button.addEventListener("dblclick", () => { const reason = setPoints(node.id, pointsOf(node.id) + 1); update(); toast(reason); });
+  button.addEventListener("contextmenu", event => {
+    event.preventDefault();
+    build.selected = node.id;
+    setPoints(node.id, pointsOf(node.id) - 1);
+    update();
+  });
+  return button;
+}
+
+function masteryBar(mastery) {
+  const top = RULES.tierThresholds[RULES.tierThresholds.length - 1];
+  const level = masteryLevelOf(mastery.id);
+  const bar = document.createElement("div");
+  bar.className = "mastery-bar";
+  const track = document.createElement("div");
+  track.className = "track";
+  track.innerHTML = `<div class="fill" style="height:${Math.min(100, level / top * 100)}%"></div>` +
+    RULES.tierThresholds.map((need, index) => `<div class="mark${level >= need ? " reached" : ""}" style="bottom:${need / top * 100}%"
+      title="Tier ${ROMAN[index]} at mastery level ${need}">${index < 2 ? ROMAN[index] : need}</div>`).join("");
+  const box = document.createElement("div");
+  box.className = "level";
+  const plus = Object.assign(document.createElement("button"), { type: "button", textContent: "+" });
+  const minus = Object.assign(document.createElement("button"), { type: "button", textContent: "−" });
+  plus.title = "Mastery level +1 (Shift: up to the next tier)";
+  minus.title = "Mastery level −1";
+  plus.setAttribute("aria-label", "more mastery level");
+  minus.setAttribute("aria-label", "less mastery level");
+  const out = document.createElement("output");
+  out.textContent = level;
+  plus.disabled = level >= top;
+  minus.disabled = level <= 0;
+  plus.addEventListener("click", event => {
+    const reason = setMasteryLevel(mastery.id, event.shiftKey ? RULES.tierThresholds.find(need => need > level) || top : level + 1);
+    update();
+    toast(reason);
+  });
+  minus.addEventListener("click", () => { setMasteryLevel(mastery.id, level - 1); update(); });
+  box.append(plus, out, minus);
+  bar.append(track, box);
+  return bar;
+}
+
+function renderBoard() {
+  const frame = document.getElementById("boardFrame");
+  frame.innerHTML = "";
+  const mastery = masteryById[build.tab];
+  if (!mastery) {
+    frame.innerHTML = `<div class="empty-board"><p class="caps" style="font-size:22px;color:var(--gold)">No mastery chosen</p>
+      <p>Choose two masteries to plan their skills and passives.</p></div>`;
+    const button = Object.assign(document.createElement("button"), { type: "button", className: "btn", textContent: "Choose mastery" });
+    button.addEventListener("click", openPicker);
+    frame.firstChild.append(button);
+    return;
+  }
+  frame.style.setProperty("--mastery", mastery.accent);
+  const board = document.createElement("div");
+  board.className = "board";
+  const tiers = document.createElement("div");
+  tiers.className = "tiers" + (query ? " searching" : "");
+  mastery.tiers.forEach((tier, index) => {
+    if (!tier.actives.length && !tier.passives.length) return;
+    const open = tierUnlocked(mastery.id, index);
+    const need = RULES.tierThresholds[index];
+    const row = document.createElement("div");
+    row.className = "tier" + (open ? "" : " locked");
+    row.insertAdjacentHTML("beforeend", `<span class="tier-label caps">Tier ${ROMAN[index]}${open || !need ? "" : ` · needs mastery level ${need}`}</span>`);
+    const actives = document.createElement("div");
+    actives.className = "nodes actives";
+    tier.actives.forEach(skill => actives.append(nodeButton(nodeById[skill.id])));
+    const passives = document.createElement("div");
+    passives.className = "nodes passives";
+    tier.passives.forEach(passive => passives.append(nodeButton(nodeById[passive.id])));
+    row.append(actives, passives);
+    tiers.append(row);
+  });
+  board.append(masteryBar(mastery), tiers);
+  frame.append(board);
+  const actions = document.createElement("div");
+  actions.className = "board-actions";
+  actions.innerHTML = `<span>Skills left, passives right, tier I at the bottom. Hover to look, click to pin, double-click +1,
+    right-click −1.</span>`;
+  const reset = Object.assign(document.createElement("button"), { type: "button", className: "link", textContent: `Reset ${mastery.name}` });
+  reset.addEventListener("click", () => {
+    if (!confirm(`Remove all points, modifiers and feats in ${mastery.name}?`)) return;
+    for (const [id, entry] of Object.entries(nodeById)) {
+      if (entry.mastery.id !== mastery.id) continue;
+      delete build.points[id]; delete build.mods[id]; delete build.feats[id]; delete build.bonus[id];
+    }
+    build.masteryLevel[mastery.id] = 0;
+    update();
+  });
+  actions.append(reset);
+  frame.append(actions);
+}
+
+// ---- Tooltip panel -----------------------------------------------------------------------------------------------
+
+// The tooltip shows the selected node, or a hovered one as a preview (like the game's tooltip on hover).
+function renderTip(previewId) {
+  const box = document.getElementById("tip");
+  const shownId = previewId || build.selected;
+  const entry = shownId && nodeById[shownId];
+  box.classList.toggle("preview", Boolean(previewId && previewId !== build.selected));
+  if (!entry || !build.masteries.includes(entry.mastery.id)) {
+    box.innerHTML = `<div class="tip-head"><h2>Details</h2></div><div class="tip-body"><p class="muted">Select a skill or passive in
+      the tree to see its text, points, modifiers and feats.</p></div>`;
+    return;
+  }
+  const { node, kind, mastery } = entry;
+  box.style.setProperty("--mastery", mastery.accent);
+  const points = pointsOf(node.id);
+  const flags = kind === "active"
+    ? ["Active", ...node.flags.filter(flag => !HIDDEN_FLAGS.includes(flag))]
+        .map(flag => `<u>${escapeHtml(flag.replace("Type.", "").replace("WeaponAttack.", "Weapon "))}</u>`)
+    : ["Passive"];
+  box.innerHTML = `<div class="tip-head"><h2>${escapeHtml(node.name)}</h2>
+    <div class="sub">${escapeHtml(mastery.name)} - ${flags.join(" - ")}</div></div>`;
+  const body = document.createElement("div");
+  body.className = "tip-body";
+  const invest = document.createElement("div");
+  invest.className = "invest";
+  invest.innerHTML = `<span class="caps" style="color:#c9b58a">${kind === "active" ? "Skill points" : "Passive level"}</span>`;
+  invest.append(stepper(points, { min: 0, max: kind === "passive" ? node.max : Infinity, label: node.name + " points",
+                                  showMax: kind === "passive" }, value => { const reason = setPoints(node.id, value); update(); toast(reason); }));
+  body.append(invest);
+  if (!tierUnlocked(mastery.id, entry.tierIndex)) {
+    body.insertAdjacentHTML("beforeend", `<p class="why" style="text-align:center">Tier ${ROMAN[entry.tierIndex]} needs mastery level
+      ${RULES.tierThresholds[entry.tierIndex]}.</p>`);
+  }
+  if (kind === "active") {
+    const rows = [];
+    if (node.cost) rows.push(["Cost", `${node.cost} Energy`]);
+    if (node.reservation) rows.push(["Reserves", `${node.reservation} Energy`]);
+    rows.push(["Cooldown", node.cooldown ? `${node.cooldown}s` : "None"]);
+    body.insertAdjacentHTML("beforeend", `<div class="stats">${rows.map(([k, v]) => `<div><span>${k}:</span><b>${v}</b></div>`).join("")}</div>`);
+    body.insertAdjacentHTML("beforeend", `<div class="section-title">Description</div><div class="desc">${fillText(node.text, node.values, 0, points)}</div>`);
+    renderModifiers(body, node);
+  } else {
+    const level = Math.max(points, 1);
+    const text = fillText(node.text, node.values, level - 1, level);
+    body.insertAdjacentHTML("beforeend", `<div class="section-title">Level ${level}${points ? "" : " (preview)"}</div>`);
+    if (/\S/.test(text.replace(/<[^>]*>/g, "").replace(/Level \d+:/, ""))) {
+      body.insertAdjacentHTML("beforeend", `<div class="desc">${text}</div>`);
+    } else if (node.levels.length) {
+      body.insertAdjacentHTML("beforeend", "<ul class=\"values\">" + node.levels.map(({ label, values }) =>
+        `<li><span>${escapeHtml(label.replace(/ Current$/, ""))}</span><b>${formatValue(label, values[Math.min(values.length, level) - 1])}</b></li>`).join("") + "</ul>");
+    }
+    renderFeats(body, node, points);
+  }
+  box.append(body);
+}
+
+function renderModifiers(body, skill) {
+  const capacity = capacityOf(skill.id);
+  const used = usedCapacity(skill.id);
+  const chosen = chosenMods(skill.id);
+  const known = capacity.base !== null;
+  body.insertAdjacentHTML("beforeend", "<div class=\"section-title\">Modifiers</div>");
+  const slots = document.createElement("div");
+  slots.className = "slots";
+  for (let i = 0; i < RULES.maxModifiers; i++) {
+    const id = chosen[i];
+    slots.insertAdjacentHTML("beforeend", id
+      ? `<span class="slot on" title="${escapeHtml(DATA.modifiers[id].name)}">${rankOf(skill.id, id)}/${DATA.modifiers[id].max}</span>`
+      : `<span class="slot">${ROMAN[i]}</span>`);
+  }
+  body.append(slots);
+  // Like the game's capacity row: one diamond per available capacity point, then the locked steps as numbers.
+  const diamonds = document.createElement("div");
+  diamonds.className = "diamonds";
+  const total = known ? capacity.base + capacity.bonus : used;
+  for (let i = 0; i < Math.max(total, used); i++) {
+    diamonds.insertAdjacentHTML("beforeend", `<span class="diamond ${i < used ? "used" : "open"}${known && i >= capacity.base ? " bonus" : ""}"></span>`);
+  }
+  for (const step of RULES.capacity) {
+    if (step > (known ? capacity.base : used)) diamonds.insertAdjacentHTML("beforeend", `<span class="diamond"><span>${step}</span></span>`);
+  }
+  body.append(diamonds);
+  body.insertAdjacentHTML("beforeend", known
+    ? `<div class="cap-line">Capacity ${used} / ${total} · ${chosen.length} of ${RULES.maxModifiers} modifiers</div>`
+    : `<div class="cap-line unknown">Capacity per skill point is not known yet: the game computes it in code and is asked in game
+       with the "call" command. Until then capacity is not checked.</div>`);
+  const bonus = document.createElement("div");
+  bonus.className = "cap-line";
+  bonus.style.marginTop = "6px";
+  bonus.append("Extra capacity from items ");
+  bonus.append(stepper(capacity.bonus, { min: 0, max: RULES.capacityBonusMax, label: "extra capacity", showMax: true }, value => {
+    build.bonus[skill.id] = value;
+    update();
+  }));
+  body.append(bonus);
+
+  const list = document.createElement("ul");
+  list.className = "mod-list";
+  const ids = [...skill.modifiers].sort((a, b) => (rankOf(skill.id, b) ? 1 : 0) - (rankOf(skill.id, a) ? 1 : 0));
+  for (const id of ids) {
+    const modifier = DATA.modifiers[id];
+    const rank = rankOf(skill.id, id);
+    const reason = blockedReason(skill.id, id);
+    const item = document.createElement("li");
+    item.className = "mod" + (rank ? " on" : "") + (!rank && reason ? " blocked" : "");
+    item.innerHTML = `<div><div class="mod-name">${escapeHtml(modifier.name)}</div>
+      <div class="mod-meta">Rank ${rank}/${modifier.max} · capacity per rank: ${modifier.capacity}</div></div>`;
+    item.append(stepper(rank, { min: 0, max: modifier.max, label: modifier.name + " rank" }, value => {
+      if (value > rank && reason) return;
+      build.mods[skill.id] = build.mods[skill.id] || {};
+      if (value) build.mods[skill.id][id] = value;
+      else delete build.mods[skill.id][id];
+      update();
+    }));
+    const shownRank = Math.max(rank, 1);
+    item.insertAdjacentHTML("beforeend", `<div class="mod-text">${fillText(modifier.text, modifier.values, shownRank - 1, shownRank)}</div>`);
+    if (reason) item.insertAdjacentHTML("beforeend", `<div class="why">${escapeHtml(reason)}</div>`);
+    list.append(item);
+  }
+  body.append(list);
+}
+
+function renderFeats(body, passive, points) {
+  if (!passive.feats.length) return;
+  const thresholds = RULES.featUnlock.map(share => Math.ceil(passive.max * share));
+  const unlocked = thresholds.filter(need => points >= need).length;
+  const picked = (build.feats[passive.id] || []).slice(0, unlocked);
+  body.insertAdjacentHTML("beforeend", `<div class="section-title">Feats · ${picked.length} of ${unlocked}</div>`);
+  const feats = document.createElement("div");
+  feats.className = "feats";
+  passive.feats.forEach((feat, index) => {
+    const on = picked.includes(index);
+    const chip = Object.assign(document.createElement("button"), { type: "button", className: "feat" + (on ? " on" : ""), textContent: feat.name });
+    chip.title = feat.text;
+    chip.disabled = !on && picked.length >= unlocked;
+    chip.addEventListener("click", () => {
+      build.feats[passive.id] = on ? picked.filter(i => i !== index) : [...picked, index];
+      update();
+    });
+    feats.append(chip);
+  });
+  body.append(feats);
+  for (const index of picked) {
+    const feat = passive.feats[index];
+    const text = fillText(feat.text, feat.values, 0, 1);
+    const shown = /\S/.test(text.replace(/<[^>]*>/g, "")) ? text
+      : (feat.levels || []).map(({ label, values }) => `${escapeHtml(label)} <span class="num">${formatValue(label, values[0])}</span>`).join(", ");
+    body.insertAdjacentHTML("beforeend", `<p class="feat-text"><b>${escapeHtml(feat.name)}:</b> ${shown}</p>`);
+  }
+  body.insertAdjacentHTML("beforeend", `<p class="muted">Feat slots open at ${thresholds.join(" and ")} points.</p>`);
+}
+
+// ---- Main --------------------------------------------------------------------------------------------------------
+
+function update() {
+  save();
+  renderBar();
+  renderTabs();
+  renderOverview();
+  renderBoard();
+  renderTip();
+}
+
+if (!DATA) {
+  document.getElementById("boardFrame").innerHTML = `<div class="empty-board"><p>build_data.js is missing.</p>
+    <p>Run <code>python3 tools/build_data.py</code> after a mega dump.</p></div>`;
+} else {
+  const version = DATA.version || {};
+  document.getElementById("version").innerHTML = `Game data <b>${escapeHtml((version.game || "?").split("-")[0])}</b>` +
+    `${version.build ? " · " + escapeHtml(version.build) : ""}${version.steamBuild ? " · Steam build " + escapeHtml(version.steamBuild) : ""}` +
+    ` · read ${escapeHtml(version.dumped || "?")}`;
+  document.getElementById("version").title = version.game || "";
+  const search = document.getElementById("search");
+  search.addEventListener("input", () => {
+    query = search.value.trim();
+    const mine = query ? build.masteries.reduce((sum, id) => sum + hitsIn(id), 0) : 0;
+    const others = query ? DATA.masteries.filter(m => !build.masteries.includes(m.id)).reduce((sum, m) => sum + hitsIn(m.id), 0) : 0;
+    document.getElementById("searchInfo").textContent = query ? `${mine} in your masteries` + (others ? ` · ${others} in others` : "") : "";
+    renderTabs();
+    renderBoard();
+  });
+  document.getElementById("copyLink").addEventListener("click", async () => {
+    save();
+    try {
+      await navigator.clipboard.writeText(location.href);
+      document.getElementById("copyLink").textContent = "Link copied";
+      setTimeout(() => { document.getElementById("copyLink").textContent = "Copy build link"; }, 1500);
+    } catch (error) {
+      prompt("Copy this link:", location.href);
+    }
+  });
+  document.getElementById("reset").addEventListener("click", () => {
+    if (confirm("Remove all masteries and points?")) { build = emptyBuild(); update(); }
+  });
+  document.getElementById("pickerClose").addEventListener("click", () => document.getElementById("picker").close());
+  update();
+}
+</script>
+</body>
+</html>

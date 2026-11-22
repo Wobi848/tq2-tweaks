@@ -29,11 +29,13 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
 | Hiding during cutscenes | `cutscene.lua` | no |
 | Damage meter with graph, damage types, skills | `damage_meter.lua`, `damage_hook.lua`, `damage_meter_widget.lua` | yes |
 | Damage detail window (F7) | `damage_detail_widget.lua` | yes |
-| Game data dump (Shift+F9): creatures, drop lists, affix tables | `game_data_dump.lua`, `json_text.lua` | yes (once) |
+| Game data dump (Shift+F9): creatures, drop lists, affix tables | `game_data_dump.lua`, `asset_list.lua`, `json_text.lua` | yes (once) |
 | Gear dump (with F9): equipped items and own inventories with affix tiers and rolls | `gear_dump.lua` | yes |
-| Mega dump (Ctrl+F9, with `GameDataDump`): every data asset via reflection | `mega_dump.lua`, `batch_job.lua` | no |
+| Mega dump (Ctrl+F9, with `GameDataDump`): every data asset via reflection | `mega_dump.lua`, `asset_list.lua`, `batch_job.lua` | no |
+| Command file (with `GameDataDump`): `echo mega > TQ2Tweaks/dev_command.txt` starts a dump from outside the game (`dump`, `gamedata`, `mega`) | `dev_commands.lua` | no |
 | Data page: monsters & drops, affix chances per item kind | `tools/game_data.html` | – |
-| Affix dump (F9) incl. charms/relics, and loot filter | `affix_dump.lua`, `loot_rules.lua`, `equipment_pickup.lua`, `TQ2Tweaks/loot_filter.html` | yes |
+| Affix dump (F9) incl. charms/relics | `affix_dump.lua`, `socketable_dump.lua`, `dump_keys.lua` (all dump keys) | yes |
+| Loot filter: file, rules, F5 tab, editor | `loot_filter_file.lua`, `loot_rules.lua`, `loot_filter_menu_entries.lua`, `equipment_pickup.lua`, `TQ2Tweaks/loot_filter.html` | yes |
 | Cleanup before a level change | `main.lua` (`RegisterLoadMapPreHook`), `player.lua` | no |
 | Loop timing (`TimingLog`, off by default) | `loop_timing.lua` | yes |
 
@@ -44,7 +46,9 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
 - **Modules**: `main.lua` only wires things together. `config.lua` = defaults, `settings.lua` = values changed in
   game (saved to `TQ2Tweaks/user_settings.lua`), `ui.lua` = shared UMG building blocks,
   `*_menu_entries.lua` + `setting_entry.lua` = menu rows. A menu entry is
-  `{ label, value(), change(direction, fast) }` or `{ header = "…" }`.
+  `{ label, value(), change(direction, fast) }` or `{ header = "…" }`. Shared helpers: `game_object.lua` (safe
+  reads, valid check, short names, arrays and tag containers as Lua lists), `text_file.lua` (whole files in and out),
+  `asset_list.lua` (the game's asset list).
 - **Hooks only when needed**: the experience, drop and damage hooks are registered only once their feature is
   switched on in the menu (`lazyHooks` in `main.lua`); movement speed does nothing while it was never active.
   "Off" therefore means no intervention at all – important when narrowing down crashes.
@@ -128,15 +132,18 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
   file `loot_filter.lua` with rules `{ name, minRarity, needed, craftable, types, affixes }` (craftable: one wanted affix
   may be missing if crafting can add it – a free place by rarity, `AffixPlacesByRarity`, or a useless random affix of
   the same kind; the kind comes from the asset name `da_prefix_`/`da_suffix_`, "random" from the affix instance's
-  `Category`) – conditions of a rule combine with
-  "and", rules with "or"; pickup only, nothing is hidden. A first version with one count for all affixes was too
+  `Category`) – conditions of a rule combine with "and", rules with "or". **Only upgrades**
+  (`LootFilterUpgradesOnly`, on by default): an affix rule also needs a higher score than the worn item of the same
+  slot (slot from the type name: `da_armor_<slot>_`, `da_jewelry_<slot>_`, weapon/offhand; rings: the weaker one).
+  The worn items are read at most once per pickup pass and only when an affix rule fits. Pickup only, nothing is
+  hidden. A first version with one count for all affixes was too
   coarse (one summon stat is enough, defence needs two). Editing happens outside the game in `loot_filter.html`
   (offline, no libraries; ~490 affixes are too many for the keyboard menu); the menu only switches the filter. A page
   opened from disk may not read files by itself, but it may load a script beside it: F9 also writes `affix_data.js`
   (dump + current filter as JavaScript strings), so the editor opens filled in. Rules from that file replace the ones
   kept in the browser only when the file changed since the last visit.
   The file is loaded with an empty environment (data only), rules without a condition or with an unknown rarity are
-  left out and logged. `main.lua` reads it every `LootFilterCheckMs` and reloads it when the text changed. The F5 tab
+  left out and logged. `loot_filter_file.lua` reads it every `LootFilterCheckMs` and reloads it when the text changed. The F5 tab
   "Filter" (`loot_filter_menu_entries.lua`, rows refilled on every reload) edits a rule's on/off, rarity and count;
   key callbacks only queue the edit, the loop writes it into the rule's one-line header (`LootRules.editRule`) and
   refreshes `affix_data.js`. Item types are parts of
@@ -216,6 +223,26 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
   (`RtlpWaitForCriticalSection`, `c0000005`).
 - To narrow down a new problem: switch features off one by one – a feature that is off registers no hooks.
 
+## Build planner
+
+`TQ2Tweaks/build_planner.html` plans a character offline: two masteries, skill and passive points against the budget
+of a level, tiers by mastery level, modifiers within a skill's capacity (max 5, blocked combinations, extra capacity from
+items) and feats, with the game's own texts filled in for the chosen rank. The build is kept in the page address
+("Copy build link"). Its data file `TQ2Tweaks/build_data.js` (gitignored, game data) is written by
+`python3 tools/build_data.py` from the mega dump plus the game's mastery text files. Content marked
+`GameEntitlements.Module.Masteries.WIP` is left out (not playable). Which modifiers fit a skill is the game's own rule: the
+skill must carry every tag in the modifier's `m_DescriptionRequiredTags`. The skill points per capacity step are computed
+by the game in code (`GetRequiredPointsForCapacity`), not stored in data: they are asked in game with the command file
+`call TQ2MasteryActiveAbilityViewModel GetRequiredPointsForCapacity 1 2 3 5 7 9 11 13 15 17` (skill window open) and read
+from `call_result.json`; without that answer the page shows capacity as unknown.
+
+## Theorycraft
+
+`python3 tools/theorycraft.py --energy 60` ranks the strongest skills at level 55 with their best mastery partner
+(damage per second for one target, a pack of five and a burst with full Overwhelm/Flow). Its numbers come from the
+mega dump (game 0.7.1); the script header says which assets to read again after a patch and what the model leaves
+out (animation times, crit, enemy resistances).
+
 ## Tests
 
 ```sh
@@ -223,7 +250,9 @@ luac5.4 -p TQ2Tweaks/Scripts/*.lua
 lua5.4 tests/test_tq2tweaks.lua
 ```
 
-Runs without the game against a mocked UE4SS API.
+Runs without the game against a mocked UE4SS API (`tests/support.lua`). `test_tq2tweaks.lua` runs the test files
+(`test_mod`, `test_damage`, `test_pickup`, `test_dumps`, `test_loot_filter`, `test_misc`) in that order on one loaded
+mod; later files rely on the state the earlier ones left (registered keys, hooks, saved settings).
 
 ## Development setup
 
