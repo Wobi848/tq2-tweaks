@@ -236,10 +236,11 @@ items) and feats, with the game's own texts filled in for the chosen rank. The b
 ("Copy build link"). Its data file `TQ2Tweaks/build_data.js` (gitignored, game data) is written by
 `python3 tools/build_data.py` from the mega dump plus the game's mastery text files. Content marked
 `GameEntitlements.Module.Masteries.WIP` is left out (not playable). Which modifiers fit a skill is the game's own rule: the
-skill must carry every tag in the modifier's `m_DescriptionRequiredTags`. The skill points per capacity step are computed
-by the game in code (`GetRequiredPointsForCapacity`), not stored in data: they are asked in game with the command file
-`call TQ2MasteryActiveAbilityViewModel GetRequiredPointsForCapacity 1 2 3 5 7 9 11 13 15 17` (skill window open) and read
-from `call_result.json`; without that answer the page shows capacity as unknown.
+skill must carry every tag in the modifier's `m_DescriptionRequiredTags`. Capacity: `m_MasteryCapacity` = [1, 2, 3, 5, 7, …, 17] are the
+skill points per capacity step (index 0 unlocks the skill, capacity c needs entry c), confirmed in game on 22.11. with
+`call TQ2MasteryActiveAbilityViewModel GetRequiredPointsForCapacity 1 … 10` (2, 3, 5, …, 17, then 0): at most 9 from points,
+plus up to 4 from items. (Calling that view model's functions while the skill window was open may have preceded a game
+freeze; it is not needed any more.)
 Damage: each skill's damage formulas are exported with their scaling (weak/medium/strong/weapon/summon); the page computes
 them at the chosen level from the game's tables (`WeaponDamageScaling`, flat and speed factor, constants read from the
 dump) and adds the passives whose "increased … Damage" fits the skill's flags (taken from the variant without modifiers)

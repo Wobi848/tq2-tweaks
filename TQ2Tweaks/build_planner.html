@@ -149,7 +149,6 @@
   .diamond.used::before { background: #8fb6e0; border-color: #cfe3f7; }
   .diamond.bonus::before { border-style: dashed; }
   .cap-line { text-align: center; font-size: 13px; color: #c7bfae; }
-  .cap-line.unknown { color: var(--warn); }
   .mod-list { list-style: none; margin: 10px 0 0; padding: 0; }
   .mod { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 10px; border-radius: 8px; margin-top: 6px;
          border: 1px solid #2f3646; background: rgba(255, 255, 255, .02); }
@@ -269,8 +268,8 @@
 "use strict";
 const DATA = window.TQ2_BUILD_DATA;
 const RULES = DATA ? DATA.rules : null;
-// Skill points per capacity step as the game answered (call_result.json); null = unknown, then nothing is guessed.
-const CAPACITY_POINTS = RULES && RULES.capacityPoints;
+// Skill points a skill needs for capacity 1, 2, ... (from the game data, confirmed in game).
+const CAPACITY_POINTS = RULES ? RULES.capacityPoints : [];
 const STORAGE_KEY = "tq2BuildPlanner";
 const ROMAN = ["I", "II", "III", "IV", "V"];
 const HIDDEN_FLAGS = ["Skill", "DefaultSkill", "Triggered", "DirectUse", "MainSkill", "Active"];
@@ -366,13 +365,10 @@ const chosenMods = skillId => Object.keys(build.mods[skillId] || {});
 const rankOf = (skillId, modId) => (build.mods[skillId] || {})[modId] || 0;
 const usedCapacity = skillId => chosenMods(skillId).reduce((sum, id) => sum + rankOf(skillId, id) * DATA.modifiers[id].capacity, 0);
 
+// Capacity of a skill: one per skill-point threshold reached, plus the extra capacity from items.
 function capacityOf(skillId) {
-  const bonus = build.bonus[skillId] || 0;
-  if (!CAPACITY_POINTS) return { base: null, bonus };
   const points = pointsOf(skillId);
-  let steps = 0;
-  while (steps < CAPACITY_POINTS.length && points >= CAPACITY_POINTS[steps]) steps++;
-  return { base: steps ? RULES.capacity[steps - 1] : 0, bonus };
+  return { base: CAPACITY_POINTS.filter(needed => points >= needed).length, bonus: build.bonus[skillId] || 0 };
 }
 
 function budget() {
@@ -399,7 +395,7 @@ function blockedReason(skillId, modId) {
   const conflict = chosen.find(id => modifier.blocks.includes(id) || DATA.modifiers[id].blocks.includes(modId));
   if (conflict) return `Cannot be combined with ${DATA.modifiers[conflict].name}.`;
   const capacity = capacityOf(skillId);
-  if (capacity.base !== null && usedCapacity(skillId) + modifier.capacity > capacity.base + capacity.bonus) {
+  if (usedCapacity(skillId) + modifier.capacity > capacity.base + capacity.bonus) {
     return "Not enough capacity: put more points into the skill.";
   }
   return null;
@@ -1088,7 +1084,6 @@ function renderModifiers(body, skill) {
   const capacity = capacityOf(skill.id);
   const used = usedCapacity(skill.id);
   const chosen = chosenMods(skill.id);
-  const known = capacity.base !== null;
   body.insertAdjacentHTML("beforeend", "<div class=\"section-title\">Modifiers</div>");
   const slots = document.createElement("div");
   slots.className = "slots";
@@ -1099,21 +1094,21 @@ function renderModifiers(body, skill) {
       : `<span class="slot">${ROMAN[i]}</span>`);
   }
   body.append(slots);
-  // Like the game's capacity row: one diamond per available capacity point, then the locked steps as numbers.
+  // Like the game's capacity row: a diamond per capacity point (filled when used, dashed from items), then the
+  // locked ones with the skill points they need.
   const diamonds = document.createElement("div");
   diamonds.className = "diamonds";
-  const total = known ? capacity.base + capacity.bonus : used;
+  const total = capacity.base + capacity.bonus;
   for (let i = 0; i < Math.max(total, used); i++) {
-    diamonds.insertAdjacentHTML("beforeend", `<span class="diamond ${i < used ? "used" : "open"}${known && i >= capacity.base ? " bonus" : ""}"></span>`);
+    diamonds.insertAdjacentHTML("beforeend", `<span class="diamond ${i < used ? "used" : "open"}${i >= capacity.base ? " bonus" : ""}"></span>`);
   }
-  for (const step of RULES.capacity) {
-    if (step > (known ? capacity.base : used)) diamonds.insertAdjacentHTML("beforeend", `<span class="diamond"><span>${step}</span></span>`);
-  }
+  CAPACITY_POINTS.slice(capacity.base).forEach(needed => {
+    diamonds.insertAdjacentHTML("beforeend", `<span class="diamond" title="needs ${needed} skill points"><span>${needed}</span></span>`);
+  });
   body.append(diamonds);
-  body.insertAdjacentHTML("beforeend", known
-    ? `<div class="cap-line">Capacity ${used} / ${total} · ${chosen.length} of ${RULES.maxModifiers} modifiers</div>`
-    : `<div class="cap-line unknown">Capacity per skill point is not known yet: the game computes it in code and is asked in game
-       with the "call" command. Until then capacity is not checked.</div>`);
+  const next = CAPACITY_POINTS[capacity.base];
+  body.insertAdjacentHTML("beforeend", `<div class="cap-line">Capacity ${used} / ${total} · ${chosen.length} of ${RULES.maxModifiers}
+    modifiers${next ? ` · next capacity at ${next} skill points` : ""}</div>`);
   const bonus = document.createElement("div");
   bonus.className = "cap-line";
   bonus.style.marginTop = "6px";

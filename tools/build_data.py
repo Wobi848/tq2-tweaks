@@ -18,8 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DUMP = ROOT / "TQ2Tweaks" / "mega_dump.jsonl"
 OUTPUT = ROOT / "TQ2Tweaks" / "build_data.js"
-# Skill points per capacity step, computed by the game in code (not in its data). Asked in game with the command file:
-#   call TQ2MasteryActiveAbilityViewModel GetRequiredPointsForCapacity 1 2 3 5 7 9 11 13 15 17
+# The game's answer to "call TQ2MasteryActiveAbilityViewModel GetRequiredPointsForCapacity 1 2 3 4 5 6 7 8 9 10" (command
+# file, skill window open), used to check the capacity rule read from the data.
 CALL_RESULT = ROOT / "TQ2Tweaks" / "call_result.json"
 # Affix dump (Shift+F9 in game): the random item affixes with their tooltip texts, for the planner's loot filter.
 AFFIX_DUMP = ROOT / "TQ2Tweaks" / "affix_dump.txt"
@@ -371,16 +371,20 @@ def random_affixes():
     return [a for a in affixes if a["text"]]
 
 
-def capacity_points(capacities):
-    """Skill points needed for each capacity step from the game's answer in call_result.json, or None."""
-    if not CALL_RESULT.exists():
-        return None
-    result = json.loads(CALL_RESULT.read_text(encoding="utf-8"))
-    if result.get("function") != "GetRequiredPointsForCapacity":
-        return None
-    by_capacity = {r.get("argument"): r.get("value") for r in result.get("results", [])}
-    points = [by_capacity.get(capacity) for capacity in capacities]
-    return points if all(isinstance(p, (int, float)) for p in points) else None
+def capacity_points(mastery_capacity):
+    """Skill points a skill needs for capacity 1, 2, ...: capacity c needs m_MasteryCapacity[c] points (index 0 is the
+    point that unlocks the skill). Asked in game on 22.11.2026 with GetRequiredPointsForCapacity 1..10, which answered
+    2, 3, 5, 7, 9, 11, 13, 15, 17 and 0 (not reachable); a newer answer in call_result.json is compared."""
+    points = list(mastery_capacity[1:])
+    if CALL_RESULT.exists():
+        result = json.loads(CALL_RESULT.read_text(encoding="utf-8"))
+        if result.get("function") == "GetRequiredPointsForCapacity":
+            for entry in result.get("results", []):
+                capacity, value = entry.get("argument"), entry.get("value")
+                if isinstance(capacity, int) and value and capacity <= len(points) and points[capacity - 1] != value:
+                    print(f"Warning: the game says capacity {capacity} needs {value} points, the data says "
+                          f"{points[capacity - 1]}")
+    return points
 
 
 def build(path):
@@ -429,7 +433,7 @@ def build(path):
         "rules": {"levelCap": LEVEL_CAP, "activePerLevel": settings["m_ActivePointsPerLevel"],
                   "passivePerLevel": settings["m_PassivePointsPerLevel"], "attributePerLevel": settings["m_APperLevel"],
                   "masteryPerLevel": settings["m_MasteryPointPerLevel"], "masteryFromLevel": settings["m_MasteryPointMinLevel"],
-                  "tierThresholds": tier_costs, "capacity": settings["m_MasteryCapacity"],
+                  "tierThresholds": tier_costs,
                   "capacityPoints": capacity_points(settings["m_MasteryCapacity"]),
                   "capacityBonusMax": settings["m_MasteryActiveCapacityBuffMax"],
                   "maxModifiers": settings["m_MasteryMaxModifiersPerActive"],
