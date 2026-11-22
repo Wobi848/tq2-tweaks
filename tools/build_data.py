@@ -215,6 +215,30 @@ def balancing_values(variant, objects):
     return values
 
 
+def flags_of(ability_tags):
+    """What a skill is (Spell, Projectile, Type.Cold, WeaponAttack.Ranged, ...) from its ability tags."""
+    return sorted({t.split("AbilityFlag.")[-1] for t in ability_tags if ".AbilityFlag." in t and ".Tier." not in t
+                   and ".Mastery." not in t})
+
+
+UNLOCK_TAG = "GrimAbilitySystem.GameplayEffect."
+
+
+def variant_switches(selector, classes):
+    """Variants a modifier turns on: the selector's descriptions that need a gameplay effect (the modifier grants it,
+    e.g. Shadow Dagger grants bp_bge_..._shadowDagger_unlock and Trick Shot becomes a spell): [{unlock, flags}]."""
+    switches = []
+    for description in (classes.get(selector) or {}).get("m_Descriptions") or []:
+        needed = [t[len(UNLOCK_TAG):] for t in tags(description, "m_ActivationRequiredTags") if t.startswith(UNLOCK_TAG)]
+        variant = classes.get(short(description.get("m_Description")))
+        if len(needed) == 1 and variant:
+            switches.append({"unlock": needed[0], "flags": flags_of(tags(variant, "m_AbilityTags"))})
+    return switches
+
+
+GRANTED_EFFECT = re.compile(r'"GameplayEffect": "[^"]*/(bp_bge_[A-Za-z0-9_]+)\.')
+
+
 def skill_entry(description, classes, objects, texts):
     selector = short(description["pAbility"])
     variants = ability_variants(selector, classes)
@@ -230,8 +254,7 @@ def skill_entry(description, classes, objects, texts):
     # Flags (Spell, Projectile, Type.Cold, ...) of the variant the skill has without modifiers: variants that a modifier
     # turns on (e.g. Lightning Bolt as a weapon attack) must not change what the skill is.
     own_tags = tags(default_variant(selector, classes, variants), "m_AbilityTags") or sorted(skill_tags)
-    flags = sorted({t.split("AbilityFlag.")[-1] for t in own_tags if ".AbilityFlag." in t and ".Tier." not in t
-                    and ".Mastery." not in t})
+    flags = flags_of(own_tags)
     numbers = values_at(values, 1)
     return {"id": selector, "name": name, "flags": flags, "tags": sorted(skill_tags),
             "text": describe(texts, key, fallback), "values": {k: [v] for k, v in numbers.items()},
@@ -239,7 +262,8 @@ def skill_entry(description, classes, objects, texts):
             or numbers.get("MPCost") or numbers.get("Cost") or numbers.get("BaseCostMP") or numbers.get("BaseCostEnergy"),
             "cooldown": numbers.get("BaseCD") or numbers.get("CD"),
             "reservation": numbers.get("MPReservation"),
-            "damage": damage_parts(values, numbers)}
+            "damage": damage_parts(values, numbers),
+            "switches": variant_switches(selector, classes)}
 
 
 def modifier_entry(name, obj, texts):
@@ -251,7 +275,8 @@ def modifier_entry(name, obj, texts):
             "requires": tags(obj, "m_DescriptionRequiredTags"),
             "blocks": [t.split(".")[-1] for t in tags(obj, "m_ModifierBlockedTags")],
             "text": describe(texts, key, obj.get("m_Description")),
-            "values": values_by_level(formula_by_name, max_level)}
+            "values": values_by_level(formula_by_name, max_level),
+            "grants": sorted(set(GRANTED_EFFECT.findall(json.dumps(obj))))}
 
 
 def passive_entry(description, classes, texts):

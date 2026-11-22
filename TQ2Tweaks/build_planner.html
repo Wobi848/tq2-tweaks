@@ -378,6 +378,14 @@ const chosenMods = skillId => Object.keys(build.mods[skillId] || {});
 const rankOf = (skillId, modId) => (build.mods[skillId] || {})[modId] || 0;
 const usedCapacity = skillId => chosenMods(skillId).reduce((sum, id) => sum + rankOf(skillId, id) * DATA.modifiers[id].capacity, 0);
 
+// What a skill is with its chosen modifiers: a modifier that grants a variant's unlock effect switches the skill to
+// that variant (Shadow Dagger makes Trick Shot a spell), as the game's selector does.
+function skillFlags(skill) {
+  const granted = new Set(chosenMods(skill.id).flatMap(id => (DATA.modifiers[id] && DATA.modifiers[id].grants) || []));
+  const switched = (skill.switches || []).find(variant => granted.has(variant.unlock));
+  return switched ? switched.flags : skill.flags;
+}
+
 // Capacity of a skill: one per skill-point threshold reached, plus the extra capacity from items.
 function capacityOf(skillId) {
   const points = pointsOf(skillId);
@@ -770,7 +778,7 @@ function bonusApplies(phrase, skill, part) {
   const words = phrase.toLowerCase();
   if (!/damage$/.test(words) || CONDITIONAL.test(words)) return false;
   if (/summon/.test(words) !== isSummonDamage(part)) return false;
-  const flags = skill.flags.map(flag => flag.toLowerCase());
+  const flags = skillFlags(skill).map(flag => flag.toLowerCase());
   const types = new Set(flags.filter(f => f.startsWith("type.")).map(f => f.slice(5)));
   if (part.type) types.add(part.type.toLowerCase());
   const physical = types.has("physical") || types.has("strike") || types.has("pierce");
@@ -876,7 +884,7 @@ function buildNeeds() {
     const entry = nodeById[id];
     if (!points || !entry || entry.kind !== "active" || !build.masteries.includes(entry.mastery.id)) continue;
     const skill = entry.node;
-    const flags = skill.flags.map(flag => flag.toLowerCase());
+    const flags = skillFlags(skill).map(flag => flag.toLowerCase());
     if (skill.cost || skill.reservation) needs.energy = true;
     if (flags.some(flag => flag.startsWith("summon")) || (skill.damage || []).some(isSummonDamage)) needs.summon = true;
     if (!(skill.damage || []).some(part => !isSummonDamage(part))) continue;
@@ -1118,7 +1126,7 @@ function renderTip(previewId) {
   box.style.setProperty("--mastery", mastery.accent);
   const points = pointsOf(node.id);
   const flags = kind === "active"
-    ? ["Active", ...node.flags.filter(flag => !HIDDEN_FLAGS.includes(flag))]
+    ? ["Active", ...skillFlags(node).filter(flag => !HIDDEN_FLAGS.includes(flag))]
         .map(flag => `<u>${escapeHtml(flag.replace("Type.", "").replace("WeaponAttack.", "Weapon "))}</u>`)
     : ["Passive"];
   box.innerHTML = `<div class="tip-head"><h2>${escapeHtml(node.name)}</h2>
