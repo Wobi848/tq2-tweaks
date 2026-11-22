@@ -226,8 +226,26 @@ do
         component["GetCurrent" .. name] = function(self) return self["GetBase" .. name](self) + 7 end
     end
     component.GetCurrentFitness = function() return 222 end
+    -- The attack set, read through reflection: gameplay attributes give their current value, other fields are left out.
+    local function named(value) return { ToString = function() return value end } end
+    local function prop(name, kind, struct)
+        return { GetFName = function() return named(name) end, GetStruct = function() return struct end,
+                 GetClass = function() return { GetFName = function() return named(kind) end } end }
+    end
+    local attributeData = { IsValid = function() return true end, GetSuperStruct = function() return nil end,
+        ForEachProperty = function(_, callback)
+            callback(prop("BaseValue", "FloatProperty")); callback(prop("CurrentValue", "FloatProperty")) end }
+    local attackClass = { IsValid = function() return true end, GetSuperStruct = function() return nil end,
+        ForEachProperty = function(_, callback)
+            callback(prop("AbilityCritChance", "StructProperty", attributeData)); callback(prop("m_Count", "IntProperty")) end }
+    local attackSet = valid({ GetOuter = function() return playerState end, GetAddress = function() return 610 end,
+        GetClass = function() return attackClass end,
+        AbilityCritChance = { BaseValue = 0.05, CurrentValue = 0.12 }, m_Count = 4 })
     local saved = { instances.TQ2CharacterAttributesSet, instances.TQ2AttributeSetProgression,
-                    instances.TQ2CharacterAttributesComponent }
+                    instances.TQ2CharacterAttributesComponent, instances.GrimAttributeSetAttack,
+                    instances.GrimAttributeSetMovement }
+    instances.GrimAttributeSetAttack = { attackSet }
+    instances.GrimAttributeSetMovement = nil
     instances.TQ2CharacterAttributesSet = { foreignAttributes, attributes }
     instances.TQ2AttributeSetProgression = { progression }
     instances.TQ2CharacterAttributesComponent = { component }
@@ -236,6 +254,7 @@ do
     CharacterDump.write(path, playerState, function(line) lines[#lines + 1] = line end)
     instances.TQ2CharacterAttributesSet, instances.TQ2AttributeSetProgression = saved[1], saved[2]
     instances.TQ2CharacterAttributesComponent = saved[3]
+    instances.GrimAttributeSetAttack, instances.GrimAttributeSetMovement = saved[4], saved[5]
     local storm = character.masteries[1]
     check("character dump: mastery, skill and modifier named like the game data (no _C), unspent skills left out",
         storm.id == "da_mastery_storm" and storm.points == 30 and #storm.skills == 1
@@ -248,6 +267,9 @@ do
     check("character dump: level and the player's own attribute points, not another set's",
         character.level == 27 and might.points == 30 and character.attributes.knowledge.points == 12
         and character.attributes.vigor.points == 5)
+    check("character dump: the game's computed attributes by set, only gameplay attributes",
+        character.gameAttributes.GrimAttributeSetAttack.AbilityCritChance == 0.12
+        and character.gameAttributes.GrimAttributeSetAttack.m_Count == nil)
     check("character dump: point counters of the mastery component and all attribute points granted",
         character.skillPoints.activeFromLevel == 54 and character.skillPoints.active == 56
         and character.skillPoints.mastery == 36 and character.grantedAttributePoints == 3)

@@ -262,6 +262,9 @@ gear's "% increased … Damage" go into the same pool as the passives. Gear affi
 texts from `affix_dump.txt` filled with the rolled values. Point budgets of a loaded character are the game's totals
 (spent + unspent of the mastery component, `CharacterAP` = all attribute points granted): at level 30 the game had
 13 Divinity from rewards beyond the 24 from levels, and 58 attribute points where 2 per level would give 60.
+The export also holds `gameAttributes`: the current value of every gameplay attribute in the player's attribute sets
+(attack: crit, weapon damage, attack/cast speed; defence; health; energy; movement; summons), read through reflection.
+The planner lists them under "In game"; they are the game's own results, for checking the planner's numbers.
 
 ## Theorycraft
 

@@ -5,6 +5,7 @@
 local GameObject = require("game_object")
 local GearDump = require("gear_dump")
 local JsonText = require("json_text")
+local MegaDump = require("mega_dump")
 local TextFile = require("text_file")
 
 local CharacterDump = {}
@@ -15,6 +16,10 @@ local ATTRIBUTES_COMPONENT_CLASS = "TQ2CharacterAttributesComponent"
 -- How far up the outer chain an attribute set may hang below the player state or the character.
 local MAX_OUTER_DEPTH = 3
 local ATTRIBUTES = { might = "Might", agility = "Agility", knowledge = "Knowledge", vigor = "Vigor" }
+-- The player's attribute sets whose values the game computes (crit, weapon damage, speed, resistances, health, ...).
+local GAME_ATTRIBUTE_SETS = { "GrimAttributeSetAttack", "GrimAttributeSetDefense", "GrimAttributeSetHealth",
+                              "GrimAttributeSetMana", "GrimAttributeSetMovement", "GrimAttributeSetSummon",
+                              "TQ2CharacterResourcesSet", "TQ2CharacterAttributesSet" }
 -- The mastery component's point counters (from level and in total, including rewards); exported as they are.
 local POINT_FIELDS = { activeFromLevel = "m_ActivePointsFromLevel", passiveFromLevel = "m_PassivePointsFromLevel",
                        masteryFromLevel = "m_MasteryPointsFromLevel", active = "m_ActivePoints",
@@ -111,6 +116,29 @@ local function attributesOf(attributeSet, component)
     return attributes
 end
 
+-- Current value of every gameplay attribute (FGameplayAttributeData) in an attribute set, by attribute name.
+function CharacterDump.attributeValues(attributeSet)
+    local values = {}
+    for name, field in pairs(MegaDump.serializeObject(attributeSet)) do
+        if type(field) == "table" and type(field.CurrentValue) == "number" then
+            values[name] = field.CurrentValue
+        end
+    end
+    return values
+end
+
+-- The game's computed attributes of the player: { [set class] = { [attribute] = current value } }.
+local function gameAttributes(owners)
+    local sets = {}
+    for _, className in ipairs(GAME_ATTRIBUTE_SETS) do
+        local attributeSet = ownedObject(className, owners)
+        if attributeSet ~= nil then
+            sets[className] = readOr(function() return CharacterDump.attributeValues(attributeSet) end)
+        end
+    end
+    return sets
+end
+
 -- Everything the planner needs from the player behind playerState.
 function CharacterDump.collect(playerState)
     local owners = { playerState:GetAddress() }
@@ -125,6 +153,7 @@ function CharacterDump.collect(playerState)
             ownedObject(ATTRIBUTES_COMPONENT_CLASS, owners)),
         -- CharacterAP counts every attribute point granted so far, spent or not (level 30: 58 with 52 spent).
         grantedAttributePoints = progression and readOr(function() return progression.CharacterAP.CurrentValue end),
+        gameAttributes = gameAttributes(owners),
         skillPoints = {},
         masteries = {},
         equipment = {},
