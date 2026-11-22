@@ -372,18 +372,19 @@ def random_affixes():
 
 
 def capacity_points(mastery_capacity):
-    """Skill points a skill needs for capacity 1, 2, ...: capacity c needs m_MasteryCapacity[c] points (index 0 is the
-    point that unlocks the skill). Asked in game on 22.11.2026 with GetRequiredPointsForCapacity 1..10, which answered
-    2, 3, 5, 7, 9, 11, 13, 15, 17 and 0 (not reachable); a newer answer in call_result.json is compared."""
-    points = list(mastery_capacity[1:])
+    """Skill points a skill needs for capacity 1, 2, ...: m_MasteryCapacity lists them (1, 2, 3, 5, ..., 17), so 17
+    points give capacity 10. Seen in game on 22.11.2026 (Trick Shot: 17 points, 10 capacity; Ice Shards: 4 points, 3).
+    GetRequiredPointsForCapacity(c) answers the points needed beyond capacity c (2, 3, 5, ..., 17, then 0); a newer
+    answer in call_result.json is compared."""
+    points = list(mastery_capacity)
     if CALL_RESULT.exists():
         result = json.loads(CALL_RESULT.read_text(encoding="utf-8"))
         if result.get("function") == "GetRequiredPointsForCapacity":
             for entry in result.get("results", []):
                 capacity, value = entry.get("argument"), entry.get("value")
-                if isinstance(capacity, int) and value and capacity <= len(points) and points[capacity - 1] != value:
-                    print(f"Warning: the game says capacity {capacity} needs {value} points, the data says "
-                          f"{points[capacity - 1]}")
+                if isinstance(capacity, int) and value and capacity < len(points) and points[capacity] != value:
+                    print(f"Warning: the game says capacity {capacity + 1} needs {value} points, the data says "
+                          f"{points[capacity]}")
     return points
 
 
