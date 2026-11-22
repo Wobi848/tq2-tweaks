@@ -70,7 +70,7 @@ press("F6")
 hooks["/Script/TQ2Gameplay.TQ2PlayerCharacter:OnCraftingUIClosed"].after(param(anvilCharacter))
 check("closing with Esc clears the access", anvil.access == nil and anvil.opened == 2)
 
--- Caravan anywhere: F4 opens the caravan for the player (or the caravan it already reaches), closing clears the access.
+-- Caravan anywhere: F7 opens the caravan for the player (or the caravan it already reaches), closing clears the access.
 local caravan = { access = "none", opened = 0, closedByGame = 0, viewModel = 0 }
 local caravanCharacter = {
     IsValid = function() return true end,
@@ -82,19 +82,19 @@ local caravanCharacter = {
     OnCaravanInventoryClosed = function() caravan.closedByGame = caravan.closedByGame + 1 end,
 }
 playerPawn = caravanCharacter
-press("F4")
-check("F4 opens the caravan: view model prepared, player is its own access", caravan.opened == 1 and caravan.viewModel == 1
+press("F7")
+check("F7 opens the caravan: view model prepared, player is its own access", caravan.opened == 1 and caravan.viewModel == 1
     and caravan.access == caravanCharacter and caravan.openedFor == caravanCharacter)
-press("F4")
-check("F4 again closes the caravan and clears the access", caravan.closedByGame == 1 and caravan.access == nil)
-press("F4")
+press("F7")
+check("F7 again closes the caravan and clears the access", caravan.closedByGame == 1 and caravan.access == nil)
+press("F7")
 hooks["/Script/TQ2Gameplay.TQ2PlayerCharacter:OnCaravanInventoryClosed"].after(param(caravanCharacter))
 check("closing the caravan with Esc clears the access", caravan.access == nil and caravan.opened == 2)
 local nearCaravan = { IsValid = function() return true end }
 caravanCharacter.GetCaravanAccess = function() return nearCaravan end
-press("F4")
+press("F7")
 check("next to a caravan it opens that one", caravan.openedFor == nearCaravan)
-press("F4")
+press("F7")
 
 -- Equipment pickup by rarity: threshold, range, one try per item, items not filled yet wait.
 local EquipmentPickup = require("equipment_pickup")

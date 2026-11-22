@@ -77,7 +77,7 @@ return {
     AnvilKey = "F6",
     -- Open the caravan (shared stash) anywhere with this key; switchable in the menu.
     CaravanAnywhere = 2,
-    CaravanKey = "F4",
+    CaravanKey = "F7",
     OnOffOptions = {
         { Name = "Off", Enabled = false },
         { Name = "On", Enabled = true },
@@ -217,7 +217,7 @@ return {
     DamageSkillRestColor = { R = 0.55, G = 0.55, B = 0.55, A = 1.0 },
     -- Detail window: opened/closed with DamageDetailKey while the damage meter is on. Graph of the last
     -- DamageDetailGraphSeconds seconds, stacked by skill, with a line at the average DPS.
-    DamageDetailKey = "F7",
+    DamageDetailKey = "F8",
     -- Bottom centre, just above the skill bar; the window grows upwards with more skills. The offset is in UI units,
     -- which the game scales (about 0.55 on a 1080p screen): the skill bar is ~145 px = ~265 units high.
     DamageDetailPosition = { Anchor = { X = 0.5, Y = 1 }, Alignment = { X = 0.5, Y = 1 }, Offset = { X = 0, Y = -290 } },
@@ -231,7 +231,7 @@ return {
     -- The window's numbers change once per second at most (it updates many widgets).
     DamageDetailIntervalSeconds = 1,
     -- Key that resets the damage meter (name from the UE4SS key list).
-    DamageMeterResetKey = "F8",
+    DamageMeterResetKey = "F9",
     DamageMeterBackground = { R = 0.04, G = 0.035, B = 0.03, A = 0.75 },
 
     -- Menu: key to open/close (name from the UE4SS key list) and look.
@@ -264,21 +264,21 @@ return {
     -- Measures how long the mod's loops take and logs a summary every TimingReportSeconds (performance check).
     TimingLog = false,
     TimingReportSeconds = 60,
-    -- Writes all item affixes and the affixes of ground items to AffixDumpFile in the mod folder; loot_filter.html
-    -- reads it.
+    -- AffixDumpModifier + AffixDumpKey (Shift+F9) writes all item affixes and the affixes of ground items to
+    -- AffixDumpFile in the mod folder; loot_filter.html reads it. (F9 alone resets the damage meter.)
     AffixDumpKey = "F9",
+    AffixDumpModifier = "SHIFT",
     AffixDumpFile = "affix_dump.txt",
     AffixPageDataFile = "affix_data.js",
     -- The same key also writes the equipped items and the player's inventories (for upgrade advice).
     GearDumpFile = "gear.json",
-    -- Developer tool, off by default: with Shift the key loads every creature template of the game and writes
-    -- creatures, drop lists (chances and weights as the game's formulas) and the affix tables of all item types to
-    -- GameDataFile. Loading ~1000 templates may make the game hang later (seen once, 21.11.): restart after a dump.
+    -- Developer tools, off by default, started through the command file (DevCommandFile): "gamedata" loads every
+    -- creature template of the game and writes creatures, drop lists (chances and weights as the game's formulas) and
+    -- the affix tables of all item types to GameDataFile; "mega" and "call" see below.
     GameDataDump = false,
-    GameDataDumpModifier = "SHIFT",
     GameDataFile = "game_data.json",
     GameDataPageFile = "game_data.js",
-    -- With Ctrl (and GameDataDump): every data asset of the game, read generically, one JSON line each.
+    -- "mega": every data asset of the game, read generically, one JSON line each.
     MegaDumpFile = "mega_dump.jsonl",
     -- Optional rules what the mega dump follows besides the assets (see DEFAULT_RULES in mega_dump.lua). Read at every
     -- dump, so it can be changed while the game runs.

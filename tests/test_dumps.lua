@@ -147,7 +147,7 @@ check("game data: the same data as a script for the data page",
     gamePage:sub(1, 24) == "window.TQ2_GAME_DATA = {" and gamePage:find(gameData:sub(1, 200), 1, true) ~= nil)
 check("game data: finished and logged, a second start is possible again", GameDataDump.isRunning(gameState) == false
     and gameLog[#gameLog]:match("1 creatures %(1 not loaded%), 1 drop lists, 1 item types") ~= nil)
-check("game data dump key off by default (developer tool)", keyBinds.SHIFTF9 == nil)
+check("developer dumps have no keys (command file only)", keyBinds.CONTROLF9 == nil)
 end
 
 -- Gear dump: equipped items and the player's own inventories with every affix's tier and roll, as JSON.

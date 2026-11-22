@@ -26,16 +26,16 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
 | Auto pickup by kind | `auto_pickup.lua` | yes |
 | Auto pickup of equipment by rarity | `equipment_pickup.lua`, `world_items.lua` | yes |
 | Anvil anywhere (F6) | `crafting_anywhere.lua` | yes |
-| Caravan anywhere (F4) | `caravan_anywhere.lua` | yes |
+| Caravan anywhere (F7) | `caravan_anywhere.lua` | yes |
 | Hiding during cutscenes | `cutscene.lua` | no |
 | Damage meter with graph, damage types, skills | `damage_meter.lua`, `damage_hook.lua`, `damage_meter_widget.lua` | yes |
-| Damage detail window (F7) | `damage_detail_widget.lua` | yes |
-| Game data dump (Shift+F9): creatures, drop lists, affix tables | `game_data_dump.lua`, `asset_list.lua`, `json_text.lua` | yes (once) |
-| Gear dump (with F9): equipped items and own inventories with affix tiers and rolls | `gear_dump.lua` | yes |
-| Mega dump (Ctrl+F9, with `GameDataDump`): every data asset via reflection | `mega_dump.lua`, `asset_list.lua`, `batch_job.lua` | no |
+| Damage detail window (F8) | `damage_detail_widget.lua` | yes |
+| Game data dump (command file "gamedata"): creatures, drop lists, affix tables | `game_data_dump.lua`, `asset_list.lua`, `json_text.lua` | yes (once) |
+| Gear dump (with Shift+F9): equipped items and own inventories with affix tiers and rolls | `gear_dump.lua` | yes |
+| Mega dump (command file "mega", with `GameDataDump`): every data asset via reflection | `mega_dump.lua`, `asset_list.lua`, `batch_job.lua` | no |
 | Command file (with `GameDataDump`): `echo mega > TQ2Tweaks/dev_command.txt` starts a dump from outside the game (`dump`, `gamedata`, `mega`) | `dev_commands.lua` | no |
 | Data page: monsters & drops, affix chances per item kind | `tools/game_data.html` | – |
-| Affix dump (F9) incl. charms/relics | `affix_dump.lua`, `socketable_dump.lua`, `dump_keys.lua` (all dump keys) | yes |
+| Affix dump (Shift+F9) incl. charms/relics | `affix_dump.lua`, `socketable_dump.lua`, `dump_keys.lua` (all dump keys) | yes |
 | Loot filter: file, rules, F5 tab, editor | `loot_filter_file.lua`, `loot_rules.lua`, `loot_filter_menu_entries.lua`, `equipment_pickup.lua`, `TQ2Tweaks/loot_filter.html` | yes |
 | Cleanup before a level change | `main.lua` (`RegisterLoadMapPreHook`), `player.lua` | no |
 | Loop timing (`TimingLog`, off by default) | `loop_timing.lua` | yes |
@@ -119,19 +119,19 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
 - **Damage meter**: hook on `TQ2Character:Multicast_HandleDamageReceived_*` (runs for every hit on every
   character). It only reads damage, crit, strongest damage type (`HighestDamageType.TagName`, last part as name) and
   the ability tags, then calls `DamageMeter.record`; errors are caught and logged once. Everything else (rolling DPS
-  over 5 s, per-second buckets, shares, "last fight" after 10 s without hits, reset with F8) is computed in the
+  over 5 s, per-second buckets, shares, "last fight" after 10 s without hits, reset with F9) is computed in the
   display loop.
 - **Damage per skill**: the name comes from the tag `GrimAbilitySystem.Description.bp_bga_…` (owner, mastery code,
   `_m_…` modifiers, `_basicAttack…` and `_summon…` dropped → one row per summon). Summons are `TQ2AICharacter`s
   too, so enemies hitting them land in the same hook; only abilities named `player_…`/`global_…` count (or without
   a tag, e.g. damage over time → "Other").
-- **Detail window (F7)**: `damage_detail_widget.lua`, data from `DamageMeter.details` (per-second buckets per skill,
+- **Detail window (F8)**: `damage_detail_widget.lua`, data from `DamageMeter.details` (per-second buckets per skill,
   60 s history). Stacked bars from `SizeBox` + `Border` per skill rank (colours `DamageSkillColors`, same ranks as in
   the compact panel), average line via the padding of an `Overlay` slot. Many widgets → built only while open; the
   compact panel steps aside meanwhile, and the window steps aside for the F5 menu.
 - **Loot filter** (e.g. summon stats on any item type): affixes are data assets (`UGrimItemAffix`: `m_Type` 0 prefix /
   1 suffix / 2 special, `m_Levels.Levels[].TitleText/AffixEffects[].ToolTipText`); an item carries them in
-  `UGrimItemInstance.m_Affixes[].pAffix`. All 491 are loaded at any time (two dumps, same count). F9 writes them plus
+  `UGrimItemInstance.m_Affixes[].pAffix`. All 491 are loaded at any time (two dumps, same count). Shift+F9 writes them plus
   the ground items' affixes to `affix_dump.txt` (every field under `pcall`, unreadable = `?`). Modelled on Path of
   Exile (filter file + web editor FilterBlade) and Last Epoch (rules with "at least N affixes of this pool"): a
   file `loot_filter.lua` with rules `{ name, minRarity, needed, craftable, types, affixes }` (craftable: one wanted affix
@@ -144,7 +144,7 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
   hidden. A first version with one count for all affixes was too
   coarse (one summon stat is enough, defence needs two). Editing happens outside the game in `loot_filter.html`
   (offline, no libraries; ~490 affixes are too many for the keyboard menu); the menu only switches the filter. A page
-  opened from disk may not read files by itself, but it may load a script beside it: F9 also writes `affix_data.js`
+  opened from disk may not read files by itself, but it may load a script beside it: Shift+F9 also writes `affix_data.js`
   (dump + current filter as JavaScript strings), so the editor opens filled in. Rules from that file replace the ones
   kept in the browser only when the file changed since the last visit.
   The file is loaded with an empty environment (data only), rules without a condition or with an unknown rarity are

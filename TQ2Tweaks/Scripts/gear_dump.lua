@@ -1,4 +1,4 @@
--- Gear dump (written together with the affix dump, F9): the player's equipped items and the items in the player's
+-- Gear dump (written together with the affix dump, Shift+F9): the player's equipped items and the items in the player's
 -- inventories (bags, stash) with type, rarity, item level and every affix with its tier (Level) and roll quality
 -- (the scales of its effects), as JSON in the mod folder. Groundwork for upgrade advice. Only reads.
 local GameObject = require("game_object")

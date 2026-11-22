@@ -245,27 +245,27 @@ tick()
 check("damage meter position changed, panel rebuilt", menuLines():match("> Position")
     and menuLines():match("<  Top centre  >") and meterBefore.removed == true and #playerLayerWidgets("Border") == 2)
 
-press("F7")
+press("F8")
 tick()
 check("detail window stays closed while the F5 menu is open (they would overlap)",
     #allOf("TextBlock", function(t) return t.text ~= nil and t.text:match("^DAMAGE DETAILS") ~= nil end) == 0)
-press("F7")
+press("F8")
 press("F5") -- close the menu
 game.spirit = true
 tick()
 local compactBefore = last(playerLayerWidgets("Border"))
-press("F7")
+press("F8")
 tick()
 check("shade display stays visible next to the detail window", hudWidget().visibility == 3)
 local detailWindow = last(playerLayerWidgets("Border"))
 local detailTitle = last(allOf("TextBlock", function(t) return t.text ~= nil and t.text:match("^DAMAGE DETAILS") ~= nil end))
-check("F7 opens the detail window, the compact panel steps aside", detailWindow ~= compactBefore and detailTitle ~= nil
+check("F8 opens the detail window, the compact panel steps aside", detailWindow ~= compactBefore and detailTitle ~= nil
     and compactBefore.removed == true and detailWindow.removed == nil)
 check("detail window: table row per skill (without tags: Other)",
     #allOf("TextBlock", function(t) return t.text == "Other" end) > 0)
-press("F7")
+press("F8")
 tick()
-check("F7 closes the detail window, the compact panel comes back", detailWindow.removed == true
+check("F8 closes the detail window, the compact panel comes back", detailWindow.removed == true
     and last(playerLayerWidgets("Border")) ~= detailWindow)
 game.spirit = false
 press("F5") -- reopen the menu for the following tests

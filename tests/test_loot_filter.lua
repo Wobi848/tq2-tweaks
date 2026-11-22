@@ -162,7 +162,7 @@ end
 check("affixes are read only when a rule with affixes is reached (epic item via the rarity-only rule)",
     LootRules.matchesAny(rules, { rarity = 4, typeName = "da_jewelry_ring_x",
         readAffixes = function() error("affixes read") end }) == true)
-check("affix dump key bound (for the affix picker)", keyBinds.F9 ~= nil)
+check("affix dump on Shift+F9 (for the affix picker), F9 alone is free for the meter reset", keyBinds.SHIFTF9 ~= nil)
 
 do
 -- Only upgrades: a rule with affixes takes an item only if it scores higher than the worn item of the same slot.

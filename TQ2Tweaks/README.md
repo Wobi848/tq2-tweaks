@@ -74,7 +74,7 @@ Settings:
 - **Speed:** movement speed x1 to x2, game speed x1 to x3 (everything runs faster, enemies too)
 - **Points per level:** attribute, active skill, passive skill and mastery points (for future level ups)
 - **Crafting:** free crafting on/off (all crafting costs 0); **anvil anywhere**: F6 opens the blacksmith window
-  anywhere (F6 again or Esc closes it); **caravan anywhere**: F4 opens your caravan (the shared stash) anywhere
+  anywhere (F6 again or Esc closes it); **caravan anywhere**: F7 opens your caravan (the shared stash) anywhere
 - **Auto pickup:** crafting materials, potions, charms & relics, each on/off – picked up automatically like gold;
   **equipment from** a chosen rarity (Off, Common … Legendary), same range as gold, without the flying animation;
   **loot filter**: picks up equipment that matches one of your loot filter rules (see below)
@@ -82,9 +82,9 @@ Settings:
   damage, hits, crits and the highest hit, plus (each switchable) a graph of the last 30 seconds, the share per
   damage type and the share of the 5 strongest skills (summons grouped by name, e.g. "Lich", "Automaton"). Counts
   only damage dealt by you and your summons to enemies; after 10 seconds without a hit a new fight starts, until
-  then the last fight stays visible with its average DPS. **F8** resets it.
-  **F7** opens a large detail window: graph of the last 60 seconds coloured by skill with an average line, a table
-  per skill (damage, DPS, share, hits, crit rate, highest hit), all damage types and the best second. F7 again
+  then the last fight stays visible with its average DPS. **F9** resets it.
+  **F8** opens a large detail window: graph of the last 60 seconds coloured by skill with an average line, a table
+  per skill (damage, DPS, share, hits, crit rate, highest hit), all damage types and the best second. F8 again
   closes it.
 
 ### Loot filter (e.g. only items with summon stats)
@@ -99,7 +99,7 @@ crafting; for rings the weaker ring counts), so items that cannot become better 
 **Presets** (Summoner, Survivability, Epic and better) give a starting point. Example: "Summoner: Rare+, 1 of the summon affixes",
 "Defence: Rare+, 2 of health/barrier/resistance", "Epic and better: Epic+".
 
-1. In game press **F9**. This writes `TQ2Tweaks\affix_dump.txt` with all affixes, charms and relics of the game (and
+1. In game press **Shift+F9**. This writes `TQ2Tweaks\affix_dump.txt` with all affixes, charms and relics of the game (and
    the affixes of the items on the ground, shown as "on ground") and `TQ2Tweaks\affix_data.js`, which the editor
    loads by itself. It also writes `TQ2Tweaks\gear.json` with your equipped items, bags and stash.
 2. Open `TQ2Tweaks\loot_filter.html` in your browser (it works offline): it shows all affixes and your current
@@ -110,11 +110,11 @@ crafting; for rings the weaker ring counts), so items that cannot become better 
    within a few seconds.
 
 In game, the F5 tab **Filter** lists your rules: switch each one on or off and change its rarity and how many affixes
-it needs. The changes are written into `loot_filter.lua` (and shown by the editor after the next F9).
+it needs. The changes are written into `loot_filter.lua` (and shown by the editor after the next Shift+F9).
 
-For developers: with `GameDataDump = true` in `config.lua`, **Shift+F9** writes `TQ2Tweaks\game_data.json` (all
-creatures with their drop lists, and which affixes each item type can roll). It loads every creature template of the
-game; once the game hung about 40 seconds later, so restart the game after a dump.
+For developers: with `GameDataDump = true` in `config.lua`, writing `gamedata` into `TQ2Tweaks\dev_command.txt` while the
+game runs writes `TQ2Tweaks\game_data.json` (all creatures with their drop lists, and which affixes each item type can
+roll); `mega` dumps every data asset. They load many assets; under some Proton builds the game hung afterwards.
 
 Rewards, speed, points, crafting and auto pickup are meant **for single player only**. Back up your save games
 first.

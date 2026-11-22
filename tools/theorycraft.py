@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Theorycraft: damage per second of the strongest skills at level 55, best mastery partner for each.
 
-All numbers come from the mega dump (Ctrl+F9 / command file "mega", game 0.7.1, read 21.11.2026). After a game patch,
+All numbers come from the mega dump (command file "mega", game 0.7.1, read 21.11.2026). After a game patch,
 dump again and update the tables below (skill bases from da_balancing_player_*, passives from bp_bge_player_*,
 modifiers from bp_gam_*, scaling from da_tq2_player_damage_scaling_internal).
 

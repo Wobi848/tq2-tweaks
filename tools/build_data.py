@@ -21,7 +21,7 @@ OUTPUT = ROOT / "TQ2Tweaks" / "build_data.js"
 # Skill points per capacity step, computed by the game in code (not in its data). Asked in game with the command file:
 #   call TQ2MasteryActiveAbilityViewModel GetRequiredPointsForCapacity 1 2 3 5 7 9 11 13 15 17
 CALL_RESULT = ROOT / "TQ2Tweaks" / "call_result.json"
-# Affix dump (F9 in game): the random item affixes with their tooltip texts, for the planner's loot filter.
+# Affix dump (Shift+F9 in game): the random item affixes with their tooltip texts, for the planner's loot filter.
 AFFIX_DUMP = ROOT / "TQ2Tweaks" / "affix_dump.txt"
 # Random affixes the loot filter cannot use: potion affixes and leftovers of the game's tests.
 SKIPPED_AFFIXES = re.compile(r"Potion|shipcopy|_debug|Unique", re.I)

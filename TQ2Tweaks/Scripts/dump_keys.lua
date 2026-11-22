@@ -1,6 +1,6 @@
--- The dumps and their keys: AffixDumpKey writes the affix dump and the gear dump; with config.GameDataDump (developer
--- tool) Shift + the key writes the game data dump and Ctrl + the key the mega dump. The key callbacks only hand the
--- work to the game thread. The same actions can be started through a command file (dev_commands.lua).
+-- The dumps: AffixDumpModifier + AffixDumpKey (Shift+F9) writes the affix dump and the gear dump; the key callback
+-- only hands the work to the game thread. All dumps, including the developer ones (config.GameDataDump: "gamedata",
+-- "mega", "call"), can be started through the command file (dev_commands.lua).
 local AffixDump = require("affix_dump")
 local GameDataDump = require("game_data_dump")
 local GearDump = require("gear_dump")
@@ -74,21 +74,15 @@ function DumpKeys.actions(config, playerState, log)
     return actions
 end
 
--- Binds the actions to AffixDumpKey (dump), Shift (gamedata) and Ctrl (mega) + the key.
+-- Binds the affix and gear dump to AffixDumpModifier + AffixDumpKey. The developer dumps have no key.
 function DumpKeys.register(config, actions, log)
-    local key = Key[config.AffixDumpKey]
-    if key == nil then
-        log("Unknown AffixDumpKey '" .. tostring(config.AffixDumpKey) .. "'")
+    local key, modifier = Key[config.AffixDumpKey], ModifierKey[config.AffixDumpModifier]
+    if key == nil or modifier == nil then
+        log("Unknown AffixDumpKey/AffixDumpModifier '" .. tostring(config.AffixDumpModifier) .. "+" ..
+            tostring(config.AffixDumpKey) .. "'")
         return
     end
-    RegisterKeyBind(key, onGameThread("Gear dump", log, actions.dump))
-    local gameDataModifier = ModifierKey[config.GameDataDumpModifier]
-    if actions.gamedata and gameDataModifier ~= nil then
-        RegisterKeyBind(key, { gameDataModifier }, onGameThread("Game data dump", log, actions.gamedata))
-    end
-    if actions.mega then
-        RegisterKeyBind(key, { ModifierKey.CONTROL }, onGameThread("Mega dump", log, actions.mega))
-    end
+    RegisterKeyBind(key, { modifier }, onGameThread("Gear dump", log, actions.dump))
 end
 
 return DumpKeys

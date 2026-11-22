@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Loot Filter</title>
-<!-- TQ2 Tweaks loot filter editor: rules for equipment pickup. Opens with affix_data.js (written in game with F9) and
+<!-- TQ2 Tweaks loot filter editor: rules for equipment pickup. Opens with affix_data.js (written in game with Shift+F9) and
      saves loot_filter.lua for the mod folder. Works offline, no libraries. -->
 <link rel="stylesheet" href="page_style.css">
 <style>
@@ -161,7 +161,7 @@
   </div>
 </footer>
 
-<!-- Written by the mod with F9: the affix list and the loot filter at that moment (a page may not read local files
+<!-- Written by the mod with Shift+F9: the affix list and the loot filter at that moment (a page may not read local files
      itself, but it may load a script next to it). -->
 <script src="affix_data.js"></script>
 <script src="affix_parse.js"></script>
@@ -417,7 +417,7 @@ function renderBrowser() {
     list.append(item);
   }
   const more = document.getElementById("more");
-  if (!affixes.length) more.textContent = "No affix list yet: press F9 in game, then reload this page.";
+  if (!affixes.length) more.textContent = "No affix list yet: press Shift+F9 in game, then reload this page.";
   else if (!matching.length) more.textContent = "Nothing matches.";
   else if (matching.length > LIST_LIMIT) more.textContent = `Showing ${LIST_LIMIT} of ${matching.length} – search to narrow down.`;
   else more.textContent = `${matching.length} affixes.`;
@@ -531,7 +531,7 @@ if (data) {
   }
   status.textContent = `${affixes.length} affixes · ${data.filter ? "your loot_filter.lua" : "no loot filter yet"} · from affix_data.js (F9 in game)`;
 } else {
-  status.textContent = "No affix_data.js yet – press F9 in game, then reload this page.";
+  status.textContent = "No affix_data.js yet – press Shift+F9 in game, then reload this page.";
   status.classList.add("missing");
 }
 render();

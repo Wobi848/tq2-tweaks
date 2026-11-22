@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TQ2 Game Data</title>
 <!-- TQ2 Tweaks data page: monsters with their drop tables, and which affixes each item type can roll with which chance.
-     Reads ../TQ2Tweaks/game_data.js (game data dump, GameDataDump in config.lua) and ../TQ2Tweaks/affix_data.js (F9).
+     Reads ../TQ2Tweaks/game_data.js (game data dump, GameDataDump in config.lua) and ../TQ2Tweaks/affix_data.js (Shift+F9).
      Works offline, no libraries. -->
 <link rel="stylesheet" href="../TQ2Tweaks/page_style.css">
 <style>
@@ -472,9 +472,9 @@ document.getElementById("affixSearch").addEventListener("input", renderAffixes);
 const status = document.getElementById("status");
 if (GAME) {
   status.textContent = `${creatures.length} monsters · ${Object.keys(GAME.dropLists).length} drop lists · `
-    + `${itemTypes.length} item types` + (AFFIX_DUMP ? "" : " · affix names missing (press F9 in game)");
+    + `${itemTypes.length} item types` + (AFFIX_DUMP ? "" : " · affix names missing (press Shift+F9 in game)");
 } else {
-  status.textContent = "No game data yet: set GameDataDump = true in config.lua, press Shift+F9 in game, then reload.";
+  status.textContent = "No game data yet: set GameDataDump = true in config.lua, write gamedata into dev_command.txt in the mod folder while the game runs, then reload.";
   status.classList.add("missing");
 }
 renderMonsterList();
