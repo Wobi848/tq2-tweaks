@@ -101,7 +101,9 @@ crafting; for rings the weaker ring counts), so items that cannot become better 
 
 1. In game press **Shift+F9**. This writes `TQ2Tweaks\affix_dump.txt` with all affixes, charms and relics of the game (and
    the affixes of the items on the ground, shown as "on ground") and `TQ2Tweaks\affix_data.js`, which the editor
-   loads by itself. It also writes `TQ2Tweaks\gear.json` with your equipped items, bags and stash.
+   loads by itself. It also writes `TQ2Tweaks\gear.json` with your equipped items, bags and stash, and
+   `TQ2Tweaks\character.json` with your level, attributes, skills and equipped items ("Load character" in
+   `build_planner.html` reads it).
 2. Open `TQ2Tweaks\loot_filter.html` in your browser (it works offline): it shows all affixes and your current
    `loot_filter.lua`. Add rules, set rarity, item types and the number of affixes needed, and add affixes – each row
    shows the names the affix gives an item (e.g. "Beastcaller's … Wraithlord's") and its effect.

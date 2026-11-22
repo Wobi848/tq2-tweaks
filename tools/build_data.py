@@ -264,7 +264,8 @@ def passive_entry(description, classes, texts):
         effect = classes.get(short(feat.get("m_pMainEffect"))) or {}
         if effect.get("m_Name"):
             feat_values = values_at(formulas(effect), 1)
-            feats.append({"name": plain(effect["m_Name"]), "text": template(effect.get("m_Description")),
+            feats.append({"id": short(feat.get("m_pMainEffect")), "name": plain(effect["m_Name"]),
+                          "text": template(effect.get("m_Description")),
                           "values": {k: [v] for k, v in feat_values.items()},
                           "levels": shown_values(formulas(effect), 1)})
     formula_by_name = formulas(main)
@@ -347,6 +348,50 @@ def damage_scaling(objects):
     return {"baseDamage": weapon.get("BaseDamage"), "offset": weapon.get("Offset"), "linear": weapon.get("LinearPart"),
             "expo": weapon.get("ExpoPart"), "expoBase": weapon.get("ExponentBase"),
             "flatFormula": internal.get("PlayerFlatFactor_Items"), "speedFormula": internal.get("ExpectedDmgScaling_Speed")}
+
+
+def attribute_formulas(objects):
+    """The character table's formulas of what the attributes give (DmgIncrease = Character.CurrentMight /10 /100, ...)
+    and the attribute gain per point; the page evaluates them with the character's values."""
+    table = formulas(objects.get("da_tq2_character_table"))
+    names = ["DmgIncrease", "SpeedIncrease", "CooldownFactor", "CostFactor", "HPIncrease", "CritChanceIncrease",
+             "CritDamagePoints", "Fitness", "Cunning", "Resolve"]
+    return {"perPoint": evaluate(table.get("AttributeIncreasePerPoint"), 1),
+            "formulas": {name: table[name] for name in names if table.get(name)}}
+
+
+def affix_texts():
+    """Tooltip templates of every affix in the affix dump (random, implicit and base): name -> one text per effect,
+    with the game's {Value}|fmt(...) placeholders for the page to fill with the item's rolled values."""
+    if not AFFIX_DUMP.exists():
+        return {}
+    texts, current, lines = {}, None, []
+    def finish():
+        if current and lines:
+            joined = "\n".join(line for line in lines if line.strip())
+            texts[current] = [part.strip() for part in re.split(r"\s*\|\s*\[\d+\]\s*", joined)]
+    # A text with line breaks goes on over the next lines (the game's \r\r\n reads as an empty line in between).
+    for line in AFFIX_DUMP.read_text(encoding="utf-8").splitlines():
+        if re.match(r"^[A-Z ]+ \(\d+", line) and texts:
+            break  # the next section of the dump (GROUND ITEMS, AFFIX POOLS)
+        header = re.match(r"^(da_\S+)\s+type=", line)
+        level = re.match(r'^\s+L\d+ "[^"]*" adjective "[^"]*": \[\d+\] ?(.*)$', line)
+        if header:
+            finish()
+            current, lines = header.group(1), []
+        elif level:
+            if not lines and level.group(1).strip():
+                lines = [level.group(1)]
+            elif lines:
+                finish()
+                current = None
+        elif current and lines and not line.startswith(" "):
+            lines.append(line)
+        elif not line.startswith(" "):
+            finish()
+            current = None
+    finish()
+    return texts
 
 
 def random_affixes():
@@ -442,6 +487,8 @@ def build(path):
         "masteries": mastery_list,
         "modifiers": modifiers,
         "affixes": random_affixes(),
+        "affixTexts": affix_texts(),
+        "attributes": attribute_formulas(objects),
     }
 
 

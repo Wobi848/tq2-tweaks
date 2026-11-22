@@ -1,7 +1,8 @@
--- The dumps: AffixDumpModifier + AffixDumpKey (Shift+F9) writes the affix dump and the gear dump; the key callback
+-- The dumps: AffixDumpModifier + AffixDumpKey (Shift+F9) writes the affix, gear and character dumps; the key callback
 -- only hands the work to the game thread. All dumps, including the developer ones (config.GameDataDump: "gamedata",
 -- "mega", "call"), can be started through the command file (dev_commands.lua).
 local AffixDump = require("affix_dump")
+local CharacterDump = require("character_dump")
 local GameDataDump = require("game_data_dump")
 local GearDump = require("gear_dump")
 local MegaDump = require("mega_dump")
@@ -35,7 +36,9 @@ local function writeAffixAndGear(config, playerState, log)
     if not ok then
         log("Affix dump error: " .. tostring(err))
     end
-    GearDump.write(Settings.modFilePath(config.GearDumpFile), playerState(), log)
+    local player = playerState()
+    GearDump.write(Settings.modFilePath(config.GearDumpFile), player, log)
+    CharacterDump.write(Settings.modFilePath(config.CharacterDumpFile), player, log)
 end
 
 -- Starts a dump that reads the game's asset list: start(paths) gets `paths` plus cache = the asset list.

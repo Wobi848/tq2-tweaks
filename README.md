@@ -32,6 +32,7 @@ The mod folder is `TQ2Tweaks`; in game it is the F5 menu "TQ2 Tweaks". **Single 
 | Damage detail window (F8) | `damage_detail_widget.lua` | yes |
 | Game data dump (command file "gamedata"): creatures, drop lists, affix tables | `game_data_dump.lua`, `asset_list.lua`, `json_text.lua` | yes (once) |
 | Gear dump (with Shift+F9): equipped items and own inventories with affix tiers and rolls | `gear_dump.lua` | yes |
+| Character dump (with Shift+F9): level, attributes, masteries, skills, modifiers, feats, equipped items for the build planner | `character_dump.lua` | yes |
 | Mega dump (command file "mega", with `GameDataDump`): every data asset via reflection | `mega_dump.lua`, `asset_list.lua`, `batch_job.lua` | no |
 | Command file (with `GameDataDump`): `echo mega > TQ2Tweaks/dev_command.txt` starts a dump from outside the game (`dump`, `gamedata`, `mega`) | `dev_commands.lua` | no |
 | Data page: monsters & drops, affix chances per item kind | `tools/game_data.html` | – |
@@ -248,6 +249,17 @@ and the "more" multipliers of the chosen modifiers; conditional ones are shown a
 cast and animation times are game logic. "Make loot filter" writes rules in the loot filter format from the affixes the
 build wants (damage words of the invested skills, summons, energy, capacity/levels of both masteries, defence for
 armour). Builds from links are checked against the current data, unknown entries are dropped with a notice.
+Character import: Shift+F9 also writes `TQ2Tweaks/character.json` (`character_dump.lua`): the mastery component
+(`ATQ2PlayerState.m_pMasteryComponent`: invested points, `ModifierSlots`, `FeatSlots`, the point counters), the
+attribute points (`UTQ2CharacterAttributesSet.m_AttributePoints*`), the level (`CurrentLevel` of the progression set)
+and, through the getters of `UTQ2CharacterAttributesComponent`, initial/base/current value of each attribute. It reads the
+game's data, not the skill window's view models (see the freeze note above). "Load character" in the planner turns it
+into a build (`build_character.js`). The initial attribute values are not in the data files, so without a loaded
+character the attribute section shows only what the points give. With one, each attribute is initial + what items and
+buffs gave in game + the planned points, and the character table's formulas (`da_tq2_character_table`, exported by
+`build_data.py`) give damage, crit, speed, cooldown, cost, health and Fitness/Cunning/Resolve. Might's damage and the
+gear's "% increased … Damage" go into the same pool as the passives. Gear affixes are shown with the game's tooltip
+texts from `affix_dump.txt` filled with the rolled values.
 
 ## Theorycraft
 

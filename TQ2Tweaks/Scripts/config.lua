@@ -272,6 +272,8 @@ return {
     AffixPageDataFile = "affix_data.js",
     -- The same key also writes the equipped items and the player's inventories (for upgrade advice).
     GearDumpFile = "gear.json",
+    -- And the character (level, attributes, skills, modifiers, feats, equipped items) for the build planner.
+    CharacterDumpFile = "character.json",
     -- Developer tools, off by default, started through the command file (DevCommandFile): "gamedata" loads every
     -- creature template of the game and writes creatures, drop lists (chances and weights as the game's formulas) and
     -- the affix tables of all item types to GameDataFile; "mega" and "call" see below.

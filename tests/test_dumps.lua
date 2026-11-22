@@ -1,4 +1,4 @@
--- Tests: Affix dump, game data dump, gear dump and mega dump.
+-- Tests: Affix dump, game data dump, gear dump, character dump and mega dump.
 -- Run all tests with: lua5.4 tests/test_tq2tweaks.lua
 
 local T = require("support")
@@ -191,6 +191,70 @@ do
         gear:find('"inventories":[{"items":[', 1, true) ~= nil and gear:find('"name":"Backpack"', 1, true) ~= nil
         and gear:find("da_weapon_2h_staff_b", 1, true) ~= nil and gear:find("da_weapon_2h_axe_c", 1, true) == nil
         and gearLog[1]:match("1 equipped, 1 in 1 inventories") ~= nil)
+end
+
+-- Character dump: level, attribute points, masteries with skills (points, modifiers) and passives (points, feats) as the
+-- game data names them, from the player's own mastery component and attribute sets.
+do
+    local CharacterDump = require("character_dump")
+    local function valid(fields)
+        fields.IsValid = function() return true end
+        return fields
+    end
+    local function asset(fullName) return valid({ GetFullName = function() return fullName end }) end
+    local playerState = valid({ GetAddress = function() return 600 end })
+    local skill = { pMasteryActiveAbilityDescription = { pAbility = asset("BlueprintGeneratedClass /Game/A/bp_selector_trick_shot.bp_selector_trick_shot_C") },
+                    InvestedPoints = 17,
+                    ModifierSlots = container({ { ModifierClass = asset("BlueprintGeneratedClass /Game/M/bp_gam_shadow_dagger.bp_gam_shadow_dagger_C"), Level = 1 } }) }
+    local unspent = { pMasteryActiveAbilityDescription = { pAbility = asset("BlueprintGeneratedClass /Game/A/bp_selector_other.bp_selector_other_C") },
+                      InvestedPoints = 0, ModifierSlots = container({}) }
+    local passive = { pMasteryPassiveAbilityDescription = { m_pPassiveAbility = asset("BlueprintGeneratedClass /Game/P/bp_ge_player_storm_mind.bp_ge_player_storm_mind_C") },
+                      InvestedPoints = 8, FeatSlots = container({ asset("BlueprintGeneratedClass /Game/P/bp_ge_feat_a.bp_ge_feat_a_C") }) }
+    playerState.m_pMasteryComponent = valid({ m_Masteries = container({ {
+        pMasteryDescription = { HardReference = asset("TQ2MasteryDescription /Game/M/da_mastery_storm.da_mastery_storm") },
+        InvestedMasteryPoints = 30, ActiveAbilities = container({ skill, unspent }), PassiveAbilities = container({ passive }) } }),
+        m_ActivePointsFromLevel = 54, m_ActivePoints = 56, m_MasteryPoints = 36 })
+    local attributes = valid({ GetOuter = function() return playerState end, m_AttributePointsMight = 30,
+                               m_AttributePointsAgility = 0, m_AttributePointsKnowledge = 12, m_AttributePointsVigor = 5 })
+    local foreignAttributes = valid({ GetOuter = function() return nil end, m_AttributePointsMight = 99 })
+    local progression = valid({ GetOuter = function() return playerState end, CurrentLevel = { CurrentValue = 27 },
+                               CharacterAP = { CurrentValue = 3 } })
+    local component = valid({ GetOuter = function() return playerState end })
+    for _, name in ipairs({ "Might", "Agility", "Knowledge", "Vigor" }) do
+        component["GetInitial" .. name] = function() return 50 end
+        component["GetBase" .. name] = function(self) return 50 + 5 * attributes["m_AttributePoints" .. name] end
+        component["GetCurrent" .. name] = function(self) return self["GetBase" .. name](self) + 7 end
+    end
+    component.GetCurrentFitness = function() return 222 end
+    local saved = { instances.TQ2CharacterAttributesSet, instances.TQ2AttributeSetProgression,
+                    instances.TQ2CharacterAttributesComponent }
+    instances.TQ2CharacterAttributesSet = { foreignAttributes, attributes }
+    instances.TQ2AttributeSetProgression = { progression }
+    instances.TQ2CharacterAttributesComponent = { component }
+    local character = CharacterDump.collect(playerState)
+    local path, lines = workDir .. "/character.json", {}
+    CharacterDump.write(path, playerState, function(line) lines[#lines + 1] = line end)
+    instances.TQ2CharacterAttributesSet, instances.TQ2AttributeSetProgression = saved[1], saved[2]
+    instances.TQ2CharacterAttributesComponent = saved[3]
+    local storm = character.masteries[1]
+    check("character dump: mastery, skill and modifier named like the game data (no _C), unspent skills left out",
+        storm.id == "da_mastery_storm" and storm.points == 30 and #storm.skills == 1
+        and storm.skills[1].id == "bp_selector_trick_shot" and storm.skills[1].points == 17
+        and storm.skills[1].modifiers[1].id == "bp_gam_shadow_dagger" and storm.skills[1].modifiers[1].level == 1)
+    check("character dump: passives with points and feats",
+        storm.passives[1].id == "bp_ge_player_storm_mind" and storm.passives[1].points == 8
+        and storm.passives[1].feats[1] == "bp_ge_feat_a")
+    local might = character.attributes.might
+    check("character dump: level and the player's own attribute points, not another set's",
+        character.level == 27 and might.points == 30 and character.attributes.knowledge.points == 12
+        and character.attributes.vigor.points == 5)
+    check("character dump: point counters of the mastery component and unspent attribute points",
+        character.skillPoints.activeFromLevel == 54 and character.skillPoints.active == 56
+        and character.skillPoints.mastery == 36 and character.unspentAttributePoints == 3)
+    check("character dump: initial, base and current attribute values from the attributes component",
+        might.initial == 50 and might.base == 200 and might.current == 207 and character.attributes.fitness.current == 222)
+    check("character dump: file written and summary logged",
+        io.open(path, "r") ~= nil and lines[1]:match("level 27, 1 masteries, 1 skills, 0 equipped, might 30 points 207 current") ~= nil)
 end
 
 -- Mega dump: every asset of the game's asset list, read through reflection (inherited fields, structs, arrays,
