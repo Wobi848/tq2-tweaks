@@ -21,6 +21,10 @@ OUTPUT = ROOT / "TQ2Tweaks" / "build_data.js"
 # Skill points per capacity step, computed by the game in code (not in its data). Asked in game with the command file:
 #   call TQ2MasteryActiveAbilityViewModel GetRequiredPointsForCapacity 1 2 3 5 7 9 11 13 15 17
 CALL_RESULT = ROOT / "TQ2Tweaks" / "call_result.json"
+# Affix dump (F9 in game): the random item affixes with their tooltip texts, for the planner's loot filter.
+AFFIX_DUMP = ROOT / "TQ2Tweaks" / "affix_dump.txt"
+# Random affixes the loot filter cannot use: potion affixes and leftovers of the game's tests.
+SKIPPED_AFFIXES = re.compile(r"Potion|shipcopy|_debug|Unique", re.I)
 # Where the game says which version ran (the dump is made in a running game) and which Steam build is installed.
 GAME_LOG = Path.home() / ".steam/steam/steamapps/compatdata/1154030/pfx/drive_c/users/steamuser/AppData/Local/TQ2/Saved/Logs/TQ2.log"
 STEAM_MANIFEST = Path.home() / ".steam/steam/steamapps/appmanifest_1154030.acf"
@@ -184,15 +188,29 @@ def load_dump(path):
 
 def ability_variants(selector, classes):
     """The player abilities behind a skill (a selector lists its variants; a plain ability is its own variant)."""
+    if selector.startswith("bp_bga_"):
+        return [classes[selector]] if selector in classes else []
     names = sorted(set(PLAYER_ABILITY.findall(json.dumps(classes.get(selector) or {}))))
     return [classes[n] for n in names if n in classes] or ([classes[selector]] if selector in classes else [])
+
+
+def default_variant(selector, classes, variants):
+    """The variant a skill has without modifiers: the selector's description that needs no tag to be active (variants
+    that modifiers switch on require the modifier's tag), else its sustained description, else the first variant."""
+    selector_data = classes.get(selector) or {}
+    for description in selector_data.get("m_Descriptions") or []:
+        if not tags(description, "m_ActivationRequiredTags") and description.get("m_Description"):
+            return classes.get(short(description["m_Description"])) or {}
+    sustained = (selector_data.get("m_SustainedDescription") or {}).get("m_Description")
+    return classes.get(short(sustained)) or (variants[0] if variants else {})
 
 
 def balancing_values(variant, objects):
     values = {}
     for provider in (variant.get("m_Data") or {}).get("Context", {}).get("Providers", []):
         reference = provider.get("pObject") or ""
-        if provider.get("Type") == 0 and "balancing_player" in reference:
+        # The skill's own balancing data (da_balancing_player_*, bp_balancing_*), not the shared templates.
+        if provider.get("Type") == 0 and "balancing" in reference.lower() and "_base_" not in reference:
             values.update({k: v for k, v in formulas(objects.get(short(reference))).items() if v})
     return values
 
@@ -209,15 +227,19 @@ def skill_entry(description, classes, objects, texts):
     key = text_key(selector, "skill")
     name = plain(texts.get(key + "_0Name") or next((v.get("m_Name") for v in variants if v.get("m_Name")), selector))
     fallback = next((v.get("m_Description") for v in variants if v.get("m_Description")), "")
-    flags = sorted({t.split("AbilityFlag.")[-1] for t in skill_tags if ".AbilityFlag." in t and ".Tier." not in t
+    # Flags (Spell, Projectile, Type.Cold, ...) of the variant the skill has without modifiers: variants that a modifier
+    # turns on (e.g. Lightning Bolt as a weapon attack) must not change what the skill is.
+    own_tags = tags(default_variant(selector, classes, variants), "m_AbilityTags") or sorted(skill_tags)
+    flags = sorted({t.split("AbilityFlag.")[-1] for t in own_tags if ".AbilityFlag." in t and ".Tier." not in t
                     and ".Mastery." not in t})
     numbers = values_at(values, 1)
     return {"id": selector, "name": name, "flags": flags, "tags": sorted(skill_tags),
             "text": describe(texts, key, fallback), "values": {k: [v] for k, v in numbers.items()},
             "cost": numbers.get("BaseMPCost") or numbers.get("MPCostBase") or numbers.get("BaseCost")
-            or numbers.get("MPCost"),
+            or numbers.get("MPCost") or numbers.get("Cost") or numbers.get("BaseCostMP") or numbers.get("BaseCostEnergy"),
             "cooldown": numbers.get("BaseCD") or numbers.get("CD"),
-            "reservation": numbers.get("MPReservation")}
+            "reservation": numbers.get("MPReservation"),
+            "damage": damage_parts(values, numbers)}
 
 
 def modifier_entry(name, obj, texts):
@@ -259,6 +281,94 @@ def srgb(color):
         value = value * 12.92 if value <= 0.0031308 else 1.055 * value ** (1 / 2.4) - 0.055
         return round(value * 255)
     return "#%02x%02x%02x" % tuple(channel((color or {}).get(c, 0)) for c in ("R", "G", "B"))
+
+
+# Damage formulas of skills: [factor *] <scaling function>[(argument[, level])]. The page computes the scaling at the
+# chosen character level (weak, medium, strong; weapon skills scale with weapon damage).
+DAMAGE_CALL = re.compile(r"^(?:([0-9.]+)\s*\*\s*)?(PlayerDmgScaling\.PlayerSkillDmgScaling|PlayerDamageScaling\.SkillDmg(Weak|Medium|Strong)"
+                         r"_LevelScalingFactor|PlayerDamageScaling\.WeaponSkillDmgStrong_LevelScalingFactor|SummonDamageScaling"
+                         r"\.SkillDmg(Weak|Medium|Strong)_LevelScalingFactor)(?:\(([^,()]+)(?:,[^()]*)?\))?$")
+DAMAGE_TYPES = {"Strike": "Strike", "Pierce": "Pierce", "Fire": "Fire", "Cold": "Cold", "Light": "Lightning",
+                "Lightning": "Lightning", "Poison": "Poison", "Vit": "Vitality", "Vitality": "Vitality"}
+
+
+def damage_parts(formula_by_name, numbers):
+    """Damage lines of a skill: [{label, type, scale, min, max}] with scale weak/medium/strong/weapon/summon and the
+    factor of the scaling function (multiplied by the level scaling in the page)."""
+    found = {}
+    for name, formula in formula_by_name.items():
+        if not re.search(r"Dmg|Damage", name) or not formula:
+            continue
+        match = DAMAGE_CALL.match(formula.strip())
+        if not match:
+            continue
+        factor, function, strength, summon_strength, argument = match.groups()
+        if argument is None:
+            amount = 1.0
+        else:
+            # The data mixes spellings (Damage=...(BaseDMG) next to BaseDmg=16).
+            by_lower = {k.lower(): v for k, v in numbers.items()}
+            argument = argument.strip()
+            amount = evaluate(argument, 1, numbers)
+            if amount is None and argument.lower() in by_lower:
+                amount = by_lower[argument.lower()]
+            if amount is None:
+                continue
+        amount *= float(factor or 1)
+        if "WeaponSkill" in function:
+            scale = "weapon"
+        elif function.startswith("SummonDamageScaling"):
+            scale = "summon"
+        else:
+            scale = (strength or "Weak").lower()
+        base = re.sub(r"(Min|Max)(?=Dmg|Damage)|(?<=Dmg|age)(Min|Max)", "", name)
+        kind = "max" if re.search(r"Max(Dmg|Damage)|(Dmg|Damage)Max", name) else "min" if re.search(
+            r"Min(Dmg|Damage)|(Dmg|Damage)Min", name) else "both"
+        entry = found.setdefault(base, {"label": readable(base), "scale": scale, "min": None, "max": None, "names": {},
+                                        "type": next((t for k, t in DAMAGE_TYPES.items() if base.startswith(k)), None)})
+        entry["names"][name] = amount
+        if kind in ("min", "both"):
+            entry["min"] = amount
+        if kind in ("max", "both"):
+            entry["max"] = amount
+    parts = []
+    for entry in found.values():
+        entry["min"] = entry["min"] if entry["min"] is not None else entry["max"]
+        entry["max"] = entry["max"] if entry["max"] is not None else entry["min"]
+        parts.append(entry)
+    return parts
+
+
+def damage_scaling(objects):
+    """Constants of the level scaling of skill damage, read from the game's tables (the page computes
+    WeaponDamageScaling, the flat factor and the speed factor from them, see build_planner.html)."""
+    weapon = {k: evaluate(v, 1) for k, v in formulas(objects.get("da_tq2_item_WeaponDamageScaling")).items()}
+    internal = formulas(objects.get("da_tq2_player_damage_scaling_internal"))
+    return {"baseDamage": weapon.get("BaseDamage"), "offset": weapon.get("Offset"), "linear": weapon.get("LinearPart"),
+            "expo": weapon.get("ExpoPart"), "expoBase": weapon.get("ExponentBase"),
+            "flatFormula": internal.get("PlayerFlatFactor_Items"), "speedFormula": internal.get("ExpectedDmgScaling_Speed")}
+
+
+def random_affixes():
+    """Random prefixes and suffixes from the affix dump: [{name, kind, text}] with the first tooltip text."""
+    if not AFFIX_DUMP.exists():
+        return []
+    affixes, current = [], None
+    for line in AFFIX_DUMP.read_text(encoding="utf-8").splitlines():
+        header = re.match(r"^(da_(prefix|suffix)_\S+)\s+type=", line)
+        if header:
+            current = None
+            if not SKIPPED_AFFIXES.search(header.group(1)):
+                current = {"name": header.group(1), "kind": header.group(2), "text": ""}
+                affixes.append(current)
+            continue
+        level = re.match(r'^\s+L\d+ "[^"]*" adjective "[^"]*": \[\d+\] (.+)$', line)
+        if current is not None and level and not current["text"]:
+            text = re.sub(r"\{([A-Za-z]+)\}(\|[a-z_]+\([^)]*\))?", "X", level.group(1)).strip()
+            current["text"] = re.sub(r"\s*\|\s*\[\d+\]\s*", " · ", text)
+        elif not line.startswith(" "):
+            current = None
+    return [a for a in affixes if a["text"]]
 
 
 def capacity_points(capacities):
@@ -315,6 +425,7 @@ def build(path):
         tier_costs.append(total)
     return {
         "version": data_version(Path(path)),
+        "damageScaling": damage_scaling(objects),
         "rules": {"levelCap": LEVEL_CAP, "activePerLevel": settings["m_ActivePointsPerLevel"],
                   "passivePerLevel": settings["m_PassivePointsPerLevel"], "attributePerLevel": settings["m_APperLevel"],
                   "masteryPerLevel": settings["m_MasteryPointPerLevel"], "masteryFromLevel": settings["m_MasteryPointMinLevel"],
@@ -325,6 +436,7 @@ def build(path):
                   "featUnlock": settings["m_MasteryFeatUnlockPercentages"]},
         "masteries": mastery_list,
         "modifiers": modifiers,
+        "affixes": random_affixes(),
     }
 
 

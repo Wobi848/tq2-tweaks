@@ -235,6 +235,13 @@ skill must carry every tag in the modifier's `m_DescriptionRequiredTags`. The sk
 by the game in code (`GetRequiredPointsForCapacity`), not stored in data: they are asked in game with the command file
 `call TQ2MasteryActiveAbilityViewModel GetRequiredPointsForCapacity 1 2 3 5 7 9 11 13 15 17` (skill window open) and read
 from `call_result.json`; without that answer the page shows capacity as unknown.
+Damage: each skill's damage formulas are exported with their scaling (weak/medium/strong/weapon/summon); the page computes
+them at the chosen level from the game's tables (`WeaponDamageScaling`, flat and speed factor, constants read from the
+dump) and adds the passives whose "increased … Damage" fits the skill's flags (taken from the variant without modifiers)
+and the "more" multipliers of the chosen modifiers; conditional ones are shown as "up to". Damage per hit only: hits per
+cast and animation times are game logic. "Make loot filter" writes rules in the loot filter format from the affixes the
+build wants (damage words of the invested skills, summons, energy, capacity/levels of both masteries, defence for
+armour). Builds from links are checked against the current data, unknown entries are dropped with a notice.
 
 ## Theorycraft
 

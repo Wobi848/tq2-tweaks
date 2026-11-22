@@ -169,6 +169,14 @@
   .values li:first-child { border-top: 0; }
   .values b { color: #fff; }
   .muted { color: #9ea6b3; font-size: 13px; text-align: center; }
+  .damage { border: 1px solid #3a4152; border-radius: 10px; }
+  .damage .row { padding: 8px 12px; border-top: 1px solid #2c3344; }
+  .damage .row:first-child { border-top: 0; }
+  .damage .line { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+  .damage .line b { color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .damage .final b { color: #f3d58a; font-size: 15px; }
+  .damage .how { font-size: 12px; color: #9ea6b3; margin-top: 2px; }
+  .damage .cond { font-size: 12px; color: #c9b58a; margin-top: 2px; }
 
   /* Mastery picker */
   dialog { border: 1px solid var(--gold); border-radius: 8px; background: #17130e; color: var(--text); padding: 0; max-width: 760px; width: calc(100% - 32px); }
@@ -184,6 +192,15 @@
   .pick strong { font: 18px var(--serif); font-variant: small-caps; letter-spacing: .06em; }
   .pick span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
   .credits { text-align: center; font-size: 12px; color: var(--muted); padding: 0 16px 24px; }
+  .filter-body { padding: 14px 16px 16px; display: grid; gap: 12px; }
+  .filter-rule { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; }
+  .filter-rule h3 { margin: 0 0 4px; font-size: 15px; color: var(--gold); font-weight: 400; }
+  .filter-rule p { margin: 0; font-size: 13px; color: var(--muted); }
+  .filter-rule ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; columns: 2 260px; }
+  .filter-body textarea { width: 100%; min-height: 160px; background: #0f0c09; color: var(--text); border: 1px solid var(--line);
+                          border-radius: 4px; padding: 8px; font: 12px/1.4 ui-monospace, monospace; }
+  .filter-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .filter-note { font-size: 13px; color: var(--muted); margin: 0; }
   .version { font-size: 12px; color: var(--muted); }
   .version b { color: var(--text); font-weight: 500; }
   .search { display: flex; justify-content: center; padding: 10px 16px 0; }
@@ -239,6 +256,10 @@
 </div>
 <div class="toast hide" id="toast" role="status" aria-live="polite"></div>
 <p class="credits">Unofficial fan tool. Skill data and texts © THQ Nordic / Grimlore Games, read from the game files.</p>
+<dialog id="filterDialog">
+  <div class="picker-head"><h2>Loot filter for this build</h2><button class="btn" id="filterClose" type="button">Close</button></div>
+  <div class="filter-body" id="filterBody"></div>
+</dialog>
 <dialog id="picker">
   <div class="picker-head"><h2>Choose a Mastery</h2><button class="btn" id="pickerClose" type="button">Close</button></div>
   <div class="picker-grid" id="pickerGrid"></div>
@@ -274,6 +295,35 @@ function emptyBuild() {
            selected: null, notes: "" };
 }
 let build = loadBuild();
+let droppedOnLoad = sanitizeBuild(build);
+
+// Drops what the current game data does not know (a link from before a patch, a hand-edited link) so the page still
+// opens; returns how many entries were dropped.
+function sanitizeBuild(target) {
+  if (!DATA) return 0;
+  let dropped = 0;
+  const keep = (object, test) => {
+    for (const key of Object.keys(object || {})) if (!test(key, object[key])) { delete object[key]; dropped++; }
+  };
+  const before = target.masteries.length;
+  target.masteries = target.masteries.filter(id => masteryById[id]).slice(0, 2);
+  dropped += before - target.masteries.length;
+  keep(target.masteryLevel, id => masteryById[id]);
+  keep(target.points, (id, points) => nodeById[id] && Number.isFinite(points) && points > 0);
+  keep(target.bonus, id => nodeById[id]);
+  keep(target.mods, id => nodeById[id] && nodeById[id].kind === "active");
+  for (const [skillId, mods] of Object.entries(target.mods)) {
+    keep(mods, (modId, rank) => DATA.modifiers[modId] && nodeById[skillId].node.modifiers.includes(modId) && rank > 0);
+  }
+  keep(target.feats, id => nodeById[id] && nodeById[id].kind === "passive");
+  for (const [id, picked] of Object.entries(target.feats)) {
+    const valid = (Array.isArray(picked) ? picked : []).filter(index => nodeById[id].node.feats[index]);
+    dropped += (Array.isArray(picked) ? picked.length : 1) - valid.length;
+    target.feats[id] = valid;
+  }
+  if (target.selected && !nodeById[target.selected]) target.selected = null;
+  return dropped;
+}
 
 function loadBuild() {
   const fromHash = decodeBuild(location.hash.slice(1));
@@ -557,6 +607,15 @@ function renderOverview() {
     section.append(list);
     box.append(section);
   }
+  if (build.masteries.length && DATA.affixes && DATA.affixes.length) {
+    const section = document.createElement("section");
+    section.innerHTML = "<h3 class=\"caps\">Loot filter</h3><p class=\"none\">Rules for the affixes this build wants.</p>";
+    const button = Object.assign(document.createElement("button"), { type: "button", className: "btn", textContent: "Make loot filter" });
+    button.style.marginTop = "6px";
+    button.addEventListener("click", openFilter);
+    section.append(button);
+    box.append(section);
+  }
   const totals = passiveTotals();
   if (totals.length) {
     const section = document.createElement("section");
@@ -575,8 +634,8 @@ function renderOverview() {
   box.append(notes);
 }
 
-// Percent bonuses of all invested passives, summed by what they increase ("Spell Damage"): read from the filled game
-// text, or from the passive's values where the game builds its text from parts not in the text files.
+// Percent bonuses of all invested passives and their chosen feats, summed by what they increase ("Spell Damage"): read
+// from the filled game text, or from the values where the game builds its text from parts not in the text files.
 function passiveTotals() {
   const sums = new Map();
   const add = (phrase, value) => {
@@ -599,8 +658,255 @@ function passiveTotals() {
         if (/Increased/i.test(label) && value > 1 && value < 10) add(label.replace(/Increased /i, ""), (value - 1) * 100);
       }
     }
+    for (const index of build.feats[id] || []) {
+      const feat = node.feats[index];
+      if (!feat) continue;
+      const featText = fillText(feat.text, feat.values, 0, 1).replace(/<[^>]*>/g, "");
+      for (const line of featText.split("\n").map(part => part.trim())) {
+        const match = line.match(/^\+?(\d+(?:\.\d+)?)%\s+(increased .+)$/i);
+        if (match) add(match[2], Number(match[1]));
+      }
+    }
   }
   return [...sums.entries()].map(([phrase, value]) => ({ phrase, value })).sort((a, b) => b.value - a.value);
+}
+
+// ---- Damage (from the game's formulas) ---------------------------------------------------------------------------
+
+// A formula of the game's damage tables as a function of the level (only numbers, _Level, clamp, + - * / ^ ( ) ,).
+function levelFormula(text) {
+  if (!text || !/^[0-9._+\-*/()^, \r\n]*(?:(?:clamp|_Level)[0-9._+\-*/()^, \r\n]*)*$/.test(text)) return null;
+  const body = text.replace(/\^/g, "**").replace(/\r?\n/g, " ");
+  return new Function("_Level", "const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v)); return " + body + ";");
+}
+
+const SCALING = DATA && DATA.damageScaling;
+const flatFactor = SCALING && levelFormula(SCALING.flatFormula);
+const speedFactor = SCALING && levelFormula(SCALING.speedFormula);
+
+// Damage of "SkillDmgWeak(1)" at a character level: WeaponDamageScaling(L) / 10 x (1 + 1.2 x flat factor), as in the
+// game's da_tq2_player_damage_scaling_internal; Medium and Strong add half / all of the expected speed factor.
+function scaleAt(scale, level) {
+  if (!SCALING || !flatFactor || !speedFactor) return null;
+  const weaponScaling = SCALING.baseDamage * SCALING.offset +
+    SCALING.baseDamage * (SCALING.linear * level + SCALING.expo * SCALING.expoBase ** (level - 1));
+  const weak = weaponScaling / 10 * (1 + 1.2 * flatFactor(level));
+  const speed = speedFactor(level);
+  return { weak, summon: weak, medium: weak * (1 + 0.5 * speed), strong: weak * (1 + speed), weapon: 1 + speed }[scale];
+}
+
+const CONDITIONAL = /\b(with|against|per|while|when|over time|overload|soulburn|doom|ailment|retaliation|channel|missing|nearby|burning|bleeding)\b/i;
+const DAMAGE_WORDS = ["spell", "attack", "weapon", "projectile", "area", "cold", "fire", "lightning", "physical", "strike",
+                      "pierce", "vitality", "poison", "elemental", "summon"];
+
+// Whether an "increased X Damage" bonus counts for one damage line of a skill.
+function bonusApplies(phrase, skill, part) {
+  const words = phrase.toLowerCase();
+  if (!/damage$/.test(words) || CONDITIONAL.test(words)) return false;
+  if (/summon/.test(words) !== isSummonDamage(part)) return false;
+  const flags = skill.flags.map(flag => flag.toLowerCase());
+  const types = new Set(flags.filter(f => f.startsWith("type.")).map(f => f.slice(5)));
+  if (part.type) types.add(part.type.toLowerCase());
+  const physical = types.has("physical") || types.has("strike") || types.has("pierce");
+  return DAMAGE_WORDS.filter(word => words.includes(word) && word !== "summon").every(word => {
+    if (word === "spell") return flags.includes("spell");
+    if (word === "attack" || word === "weapon") return flags.some(f => f.startsWith("weaponattack"));
+    if (word === "projectile") return flags.includes("projectile");
+    if (word === "area") return flags.includes("area");
+    if (word === "elemental") return ["cold", "fire", "lightning"].some(type => types.has(type));
+    if (word === "physical") return physical;
+    return types.has(word);
+  });
+}
+
+// "more" multipliers of the chosen modifiers: { always: [[name, factor]], conditional: [[name, factor]] }.
+function modifierMultipliers(skillId) {
+  const result = { always: [], conditional: [] };
+  for (const id of chosenMods(skillId)) {
+    const modifier = DATA.modifiers[id];
+    const rank = rankOf(skillId, id);
+    const at = name => modifier.values[name] && modifier.values[name][Math.min(rank, modifier.values[name].length) - 1];
+    let factor = null;
+    if (at("DmgMod") !== undefined && /more Damage/i.test(modifier.text) && at("DmgMod") < 10) factor = 1 + at("DmgMod");
+    for (const name of ["MoreDamage", "ThisSummonMoreDamage", "LessDamage", "IncreasedTotalDamage"]) {
+      if (factor === null && at(name) !== undefined) factor = at(name);
+    }
+    if (factor === null || factor === 1) continue;
+    const conditional = /Consume|against|per |Channel|Mark|Frozen|edge|distance|Empowered|While/i.test(modifier.text);
+    result[conditional ? "conditional" : "always"].push([modifier.name, factor]);
+  }
+  return result;
+}
+
+// Base damage values at the chosen level by their names in the game text ({data.MinDmg}), for the description.
+function damageValues(skill) {
+  const values = {};
+  for (const part of skill.damage || []) {
+    const unit = scaleAt(part.scale, build.level);
+    if (unit === null || part.scale === "weapon") continue;
+    for (const [name, amount] of Object.entries(part.names || {})) values[name] = [Math.floor(amount * unit)];
+  }
+  return values;
+}
+
+const round = value => value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
+const range = (low, high) => Math.floor(low) === Math.floor(high) ? `${Math.floor(low)}` : `${Math.floor(low)}–${Math.floor(high)}`;
+
+function renderDamage(body, skill) {
+  if (!skill.damage || !skill.damage.length) return;
+  const level = build.level;
+  const bonuses = passiveTotals();
+  const multipliers = modifierMultipliers(skill.id);
+  const more = multipliers.always.reduce((product, [, factor]) => product * factor, 1);
+  const upTo = multipliers.conditional.reduce((product, [, factor]) => product * factor, 1);
+  const rows = skill.damage.map(part => {
+    const unit = scaleAt(part.scale, level);
+    if (unit === null) return "";
+    const name = escapeHtml(part.label.replace(/^Damage$/, "Damage per hit"));
+    if (part.scale === "weapon") {
+      return `<div class="row"><div class="line"><span>${name}</span><b>${round(part.min * unit * 100)}% weapon damage</b></div>
+        <div class="how">Weapon skill: scales with your weapon, not computed here.</div></div>`;
+    }
+    const applied = bonuses.filter(bonus => bonusApplies(bonus.phrase, skill, part));
+    const increased = applied.reduce((sum, bonus) => sum + bonus.value, 0);
+    const factor = (1 + increased / 100) * more;
+    const low = part.min * unit, high = part.max * unit;
+    const how = [];
+    if (applied.length) how.push(`+${round(increased)}% increased (${applied.map(b => `${escapeHtml(b.phrase)} ${round(b.value)}`).join(", ")})`);
+    if (multipliers.always.length) how.push(multipliers.always.map(([n, f]) => `${escapeHtml(n)} ×${round(f)}`).join(", "));
+    return `<div class="row"><div class="line"><span>${name}${part.type ? " · " + escapeHtml(part.type) : ""}</span><b>${range(low, high)}</b></div>
+      ${factor !== 1 ? `<div class="line final"><span>with your passives and modifiers</span><b>${range(low * factor, high * factor)}</b></div>` : ""}
+      ${how.length ? `<div class="how">${how.join(" · ")}</div>` : ""}
+      ${multipliers.conditional.length ? `<div class="cond">Up to ${range(low * factor * upTo, high * factor * upTo)} with
+        ${multipliers.conditional.map(([n, f]) => `${escapeHtml(n)} ×${round(f)}`).join(", ")}</div>` : ""}</div>`;
+  }).join("");
+  if (!rows) return;
+  body.insertAdjacentHTML("beforeend", `<div class="section-title">Damage at level ${level}</div><div class="damage">${rows}</div>
+    <p class="muted">From the game's formulas. Not included: gear, attributes, crit, enemy resistances.</p>`);
+}
+
+// ---- Loot filter for the build ----------------------------------------------------------------------------------
+
+const RESISTANCES = ["cold resistance", "fire resistance", "lightning resistance", "poison resistance"];
+const WEAPON_TYPES = { spell: ["staff", "talisman"], attack: ["sword", "axe", "blunt", "spear", "dagger", "bow", "throwing", "shield"] };
+
+// Damage of a summon (it scales with the summon tables or is named so), not of the player's own hit.
+const isSummonDamage = part => part.scale === "summon" || /summon/i.test(part.label);
+
+// What the build wants, from the invested skills: damage words (spell, cold, projectile, ...), summons, energy use.
+function buildNeeds() {
+  const needs = { words: new Set(), summon: false, energy: false, spell: false, attack: false };
+  for (const [id, points] of Object.entries(build.points)) {
+    const entry = nodeById[id];
+    if (!points || !entry || entry.kind !== "active" || !build.masteries.includes(entry.mastery.id)) continue;
+    const skill = entry.node;
+    const flags = skill.flags.map(flag => flag.toLowerCase());
+    if (skill.cost || skill.reservation) needs.energy = true;
+    if (flags.some(flag => flag.startsWith("summon")) || (skill.damage || []).some(isSummonDamage)) needs.summon = true;
+    if (!(skill.damage || []).some(part => !isSummonDamage(part))) continue;
+    if (flags.includes("spell")) { needs.spell = true; needs.words.add("spell"); }
+    if (flags.some(flag => flag.startsWith("weaponattack"))) { needs.attack = true; needs.words.add("attack"); }
+    if (flags.includes("projectile")) needs.words.add("projectile");
+    for (const flag of flags) if (flag.startsWith("type.")) needs.words.add(flag.slice(5));
+    for (const part of skill.damage || []) if (part.type && !isSummonDamage(part)) needs.words.add(part.type.toLowerCase());
+  }
+  if (["strike", "pierce"].some(word => needs.words.has(word))) needs.words.add("physical");
+  return needs;
+}
+
+// Affixes of the dump the build wants, split into offence (also for jewellery and weapons) and defence (armour).
+function wantedAffixes(needs) {
+  const masteryNames = build.masteries.map(id => masteryById[id].name.toLowerCase());
+  const offence = [], defence = [];
+  for (const affix of DATA.affixes) {
+    const text = affix.text.toLowerCase();
+    const damageType = text.match(/increased (\w+) damage$/) || text.match(/increased (\w+) damage(?= ·)/);
+    const flatWeapon = text.match(/^x weapon (\w+) damage$/);
+    let wanted = false, armour = false;
+    // "Total Damage" is the player's own damage, so only for builds that hit with their own skills.
+    if (damageType) wanted = needs.words.has(damageType[1]) || (damageType[1] === "total" && needs.words.size > 0);
+    else if (text.includes("increased total damage")) wanted = needs.words.size > 0;
+    else if (flatWeapon) wanted = needs.attack && needs.words.has(flatWeapon[1]);
+    else if (/^summons have/.test(text)) wanted = needs.summon && /damage|speed|health|resistance/.test(text);
+    else if (/capacity to|level to/.test(text)) { wanted = masteryNames.some(name => text.includes(name)); armour = wanted; }
+    else if (text.includes("cast speed")) wanted = needs.spell;
+    else if (text.includes("attack speed")) wanted = needs.attack;
+    else if (/energy regeneration|^x energy$|increased energy$|energy reservation/.test(text)) { wanted = needs.energy; armour = wanted; }
+    if (wanted) offence.push(affix);
+    const playerDefence = !/^summons/.test(text) &&
+      (RESISTANCES.some(resistance => text === `x% ${resistance}`) || /^x health$|increased health$|barrier/.test(text));
+    if (armour || playerDefence) {
+      defence.push(affix);
+    }
+  }
+  return { offence, defence };
+}
+
+function filterRules() {
+  const needs = buildNeeds();
+  const { offence, defence } = wantedAffixes(needs);
+  const label = build.masteries.map(id => masteryById[id].name).join(" + ");
+  const weaponTypes = [...new Set([...(needs.spell || needs.summon ? WEAPON_TYPES.spell : []), ...(needs.attack ? WEAPON_TYPES.attack : [])])];
+  const rules = [];
+  if (offence.length) {
+    rules.push({ name: `${label}: jewellery`, minRarity: "Magic", needed: Math.min(3, offence.length), types: ["ring", "neck"], affixes: offence });
+    if (weaponTypes.length) rules.push({ name: `${label}: weapon`, minRarity: "Magic", needed: Math.min(2, offence.length), types: weaponTypes, affixes: offence });
+  }
+  const armour = [...new Map([...defence, ...offence.filter(a => !/^summons have|speed/i.test(a.text))].map(a => [a.name, a])).values()];
+  if (armour.length) rules.push({ name: `${label}: armour`, minRarity: "Rare", needed: Math.min(3, armour.length), types: ["head", "shoulder", "torso", "arm", "leg"], affixes: armour });
+  rules.push({ name: "Legendary", minRarity: "Legendary", needed: 1, types: [], affixes: [] });
+  return rules;
+}
+
+// loot_filter.lua in the format loot_filter.html and the mod read and edit (one header line per rule).
+function filterLua(rules) {
+  const lines = ["-- Written by build_planner.html for " + build.masteries.map(id => masteryById[id].name).join(" + ") +
+                 ": equipment is picked up if any rule matches.", "return {"];
+  for (const rule of rules) {
+    const types = rule.types.map(type => `"${type}"`).join(", ");
+    const header = `    { name = "${rule.name}", minRarity = "${rule.minRarity}", needed = ${rule.needed},` +
+      `${rule.affixes.length ? " craftable = true," : ""} types = { ${types} }, affixes = {`;
+    if (!rule.affixes.length) { lines.push(header + "} },"); continue; }
+    lines.push(header);
+    for (const affix of rule.affixes) lines.push(`        "${affix.name}", -- ${affix.text.replace(/[\n{}]/g, " ")}`);
+    lines.push("    } },");
+  }
+  lines.push("}", "");
+  return lines.join("\n");
+}
+
+function openFilter() {
+  const rules = filterRules();
+  const text = filterLua(rules);
+  const body = document.getElementById("filterBody");
+  body.innerHTML = rules.map(rule => `<div class="filter-rule"><h3>${escapeHtml(rule.name)}</h3>
+    <p>${escapeHtml(rule.minRarity)} and better · ${rule.types.length ? escapeHtml(rule.types.join(", ")) : "any item"}` +
+    `${rule.affixes.length ? ` · ${rule.needed} of these, crafting counts` : ""}</p>` +
+    (rule.affixes.length ? `<ul>${rule.affixes.map(a => `<li>${escapeHtml(a.text.replace(/^X/, "+"))}</li>`).join("")}</ul>` : "") +
+    "</div>").join("");
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.readOnly = true;
+  area.setAttribute("aria-label", "loot_filter.lua");
+  const actions = document.createElement("div");
+  actions.className = "filter-actions";
+  const copy = Object.assign(document.createElement("button"), { type: "button", className: "btn", textContent: "Copy" });
+  copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(text); copy.textContent = "Copied"; } catch (error) { area.select(); }
+  });
+  const download = Object.assign(document.createElement("button"), { type: "button", className: "btn", textContent: "Save as loot_filter.lua" });
+  download.addEventListener("click", () => {
+    const link = Object.assign(document.createElement("a"), { download: "loot_filter.lua",
+      href: URL.createObjectURL(new Blob([text], { type: "text/plain" })) });
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+  actions.append(copy, download);
+  body.append(actions);
+  body.insertAdjacentHTML("beforeend", `<p class="filter-note">Put the file into the TQ2Tweaks folder; the mod reads it again within
+    2 seconds. It replaces your current filter, so keep a copy of the old one. Fine-tune it in loot_filter.html or in game (F5, tab Filter).</p>`);
+  body.append(area);
+  document.getElementById("filterDialog").showModal();
 }
 
 // ---- Tree board --------------------------------------------------------------------------------------------------
@@ -759,7 +1065,9 @@ function renderTip(previewId) {
     if (node.reservation) rows.push(["Reserves", `${node.reservation} Energy`]);
     rows.push(["Cooldown", node.cooldown ? `${node.cooldown}s` : "None"]);
     body.insertAdjacentHTML("beforeend", `<div class="stats">${rows.map(([k, v]) => `<div><span>${k}:</span><b>${v}</b></div>`).join("")}</div>`);
-    body.insertAdjacentHTML("beforeend", `<div class="section-title">Description</div><div class="desc">${fillText(node.text, node.values, 0, points)}</div>`);
+    body.insertAdjacentHTML("beforeend", `<div class="section-title">Description</div><div class="desc">${fillText(node.text, Object.assign({},
+      node.values, damageValues(node)), 0, points)}</div>`);
+    renderDamage(body, node);
     renderModifiers(body, node);
   } else {
     const level = Math.max(points, 1);
@@ -912,9 +1220,11 @@ if (!DATA) {
     }
   });
   document.getElementById("reset").addEventListener("click", () => {
-    if (confirm("Remove all masteries and points?")) { build = emptyBuild(); update(); }
+    if (confirm("Remove all masteries and points?")) { build = emptyBuild(); droppedOnLoad = 0; update(); }
   });
   document.getElementById("pickerClose").addEventListener("click", () => document.getElementById("picker").close());
+  if (droppedOnLoad) toast(`${droppedOnLoad} entr${droppedOnLoad === 1 ? "y" : "ies"} of this build are not in the current game data and were left out.`);
+  document.getElementById("filterClose").addEventListener("click", () => document.getElementById("filterDialog").close());
   update();
 }
 </script>
