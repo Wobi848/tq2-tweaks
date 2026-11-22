@@ -6,7 +6,7 @@ const ATTRIBUTE_NAMES = ["might", "agility", "knowledge", "vigor"];
 const ATTRIBUTE_LABELS = { might: "Might", agility: "Agility", knowledge: "Knowledge", vigor: "Vigor" };
 const SLOT_LABELS = [[/^da_armor_head_/, "Head"], [/^da_armor_shoulder_/, "Shoulders"], [/^da_armor_torso_/, "Chest"],
   [/^da_armor_arm_/, "Arms"], [/^da_armor_leg_/, "Legs"], [/^da_jewelry_neck_/, "Amulet"], [/^da_jewelry_ring_/, "Ring"],
-  [/^da_weapon_offhand_/, "Off-hand"], [/^da_weapon_/, "Weapon"]];
+  [/^da_wea?pon_offhand_/, "Off-hand"], [/^da_wea?pon_/, "Weapon"]];  // the game spells some "wepon"
 const RARITY_NAMES = ["Common", "Magic", "Rare", "Infrequent", "Epic", "Legendary"];
 
 // "+12% increased Spell Damage" lines of a filled game text, as add(phrase, value) calls ("Spell Damage", 12).
@@ -23,7 +23,7 @@ const attributePointsOf = name => (build.attributes || {})[name] || 0;
 
 function attributeBudget() {
   return { spent: ATTRIBUTE_NAMES.reduce((sum, name) => sum + attributePointsOf(name), 0),
-           total: RULES.attributePerLevel * build.level };
+           total: levelPoints("attribute", build.level) + extraPoints("attribute") };
 }
 
 // Sets the points of one attribute within the level's budget; returns why more are not possible, or null.
@@ -94,7 +94,7 @@ function slotOf(typeName) {
 
 function itemName(item) {
   if (item.customName) return item.customName;
-  const words = (item.type || "?").replace(/^da_(armor|jewelry|weapon)_(head|shoulder|torso|arm|leg|neck|ring|offhand|1h|2h)_/, "")
+  const words = (item.type || "?").replace(/^da_(armor|jewelry|wea?pon)_(head|shoulder|torso|arm|leg|neck|ring|offhand|1h|2h)_/, "")
     .split("_").filter(word => !/^(t\d|normal|unique|MI|startinggear)$/i.test(word));
   const name = words.join(" ");
   return name.charAt(0).toUpperCase() + name.slice(1);
@@ -146,9 +146,23 @@ function buildFromCharacter(character) {
     }
   }
   target.tab = target.masteries[0] || null;
+  // The game's totals: points spent plus the unspent ones of the mastery component; the attribute progression counts
+  // all attribute points granted (CharacterAP).
+  const spent = { active: 0, passive: 0, mastery: 0 };
+  for (const mastery of character.masteries || []) {
+    spent.mastery += mastery.points || 0;
+    for (const skill of mastery.skills || []) spent.active += skill.points || 0;
+    for (const passive of mastery.passives || []) spent.passive += passive.points || 0;
+  }
+  const unspent = character.skillPoints || {};
+  const gameTotals = { active: spent.active + (unspent.active || 0), passive: spent.passive + (unspent.passive || 0),
+                       mastery: spent.mastery + (unspent.mastery || 0), attribute: character.grantedAttributePoints };
   const attributes = character.attributes || {};
   target.attributes = {};
-  target.character = { initial: {}, extra: {}, gear: character.equipment || [] };
+  target.character = { initial: {}, extra: {}, gear: character.equipment || [], extraPoints: {} };
+  for (const [kind, total] of Object.entries(gameTotals)) {
+    if (Number.isFinite(total)) target.character.extraPoints[kind] = total - levelPoints(kind, target.level);
+  }
   for (const name of ATTRIBUTE_NAMES) {
     const value = attributes[name] || {};
     if (value.points) target.attributes[name] = value.points;

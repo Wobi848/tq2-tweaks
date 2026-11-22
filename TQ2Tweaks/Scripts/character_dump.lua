@@ -123,7 +123,8 @@ function CharacterDump.collect(playerState)
         level = progression and readOr(function() return progression.CurrentLevel.CurrentValue end),
         attributes = attributesOf(ownedObject(ATTRIBUTE_SET_CLASS, owners),
             ownedObject(ATTRIBUTES_COMPONENT_CLASS, owners)),
-        unspentAttributePoints = progression and readOr(function() return progression.CharacterAP.CurrentValue end),
+        -- CharacterAP counts every attribute point granted so far, spent or not (level 30: 58 with 52 spent).
+        grantedAttributePoints = progression and readOr(function() return progression.CharacterAP.CurrentValue end),
         skillPoints = {},
         masteries = {},
         equipment = {},

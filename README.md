@@ -259,7 +259,9 @@ character the attribute section shows only what the points give. With one, each 
 buffs gave in game + the planned points, and the character table's formulas (`da_tq2_character_table`, exported by
 `build_data.py`) give damage, crit, speed, cooldown, cost, health and Fitness/Cunning/Resolve. Might's damage and the
 gear's "% increased … Damage" go into the same pool as the passives. Gear affixes are shown with the game's tooltip
-texts from `affix_dump.txt` filled with the rolled values.
+texts from `affix_dump.txt` filled with the rolled values. Point budgets of a loaded character are the game's totals
+(spent + unspent of the mastery component, `CharacterAP` = all attribute points granted): at level 30 the game had
+13 Divinity from rewards beyond the 24 from levels, and 58 attribute points where 2 per level would give 60.
 
 ## Theorycraft
 

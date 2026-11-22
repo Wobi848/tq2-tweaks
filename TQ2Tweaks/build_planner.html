@@ -332,6 +332,7 @@ function sanitizeBuild(target) {
   keep(target.attributes, (name, points) => ATTRIBUTE_NAMES.includes(name) && Number.isInteger(points) && points > 0);
   const character = target.character;
   if (character && !(character.initial && character.extra && Array.isArray(character.gear))) { target.character = null; dropped++; }
+  if (target.character && typeof target.character.extraPoints !== "object") target.character.extraPoints = {};
   if (target.selected && !nodeById[target.selected]) target.selected = null;
   return dropped;
 }
@@ -383,6 +384,16 @@ function capacityOf(skillId) {
   return { base: CAPACITY_POINTS.filter(needed => points >= needed).length, bonus: build.bonus[skillId] || 0 };
 }
 
+// Points a level gives by the game's rules (the planner's budget without rewards).
+function levelPoints(kind, level) {
+  if (kind === "mastery") return Math.max(0, level - RULES.masteryFromLevel + 1) * RULES.masteryPerLevel;
+  return { active: RULES.activePerLevel, passive: RULES.passivePerLevel, attribute: RULES.attributePerLevel }[kind] * level;
+}
+
+// Points of a loaded character beyond what its level gives by these rules (rewards, quests): the game's own total
+// minus levelPoints at the character's level. Zero without a loaded character.
+const extraPoints = kind => (build.character && build.character.extraPoints && build.character.extraPoints[kind]) || 0;
+
 function budget() {
   const spent = { active: 0, passive: 0 };
   for (const [id, points] of Object.entries(build.points)) {
@@ -390,10 +401,10 @@ function budget() {
     if (entry && build.masteries.includes(entry.mastery.id)) spent[entry.kind] += points;
   }
   return {
-    active: { spent: spent.active, total: RULES.activePerLevel * build.level },
-    passive: { spent: spent.passive, total: RULES.passivePerLevel * build.level },
+    active: { spent: spent.active, total: levelPoints("active", build.level) + extraPoints("active") },
+    passive: { spent: spent.passive, total: levelPoints("passive", build.level) + extraPoints("passive") },
     mastery: { spent: build.masteries.reduce((sum, id) => sum + masteryLevelOf(id), 0),
-               total: Math.max(0, build.level - RULES.masteryFromLevel + 1) * RULES.masteryPerLevel },
+               total: levelPoints("mastery", build.level) + extraPoints("mastery") },
   };
 }
 
@@ -531,10 +542,12 @@ function renderBar() {
     update();
   }));
   const totals = budget();
-  const show = (label, { spent, total }, hint) => `<span class="${spent > total ? "over" : ""}">${label}:<b>${total - spent}</b>` +
-    `<small>${spent} of ${total} used${hint ? " · " + hint : ""}</small></span>`;
-  document.getElementById("points").innerHTML = show("Active Points", totals.active) + show("Passive Points", totals.passive) +
-    show("Divinity", totals.mastery, `from level ${RULES.masteryFromLevel}`) + show("Attributes", attributeBudget());
+  const show = (label, { spent, total }, hint, kind) => `<span class="${spent > total ? "over" : ""}">${label}:<b>${total - spent}</b>` +
+    `<small>${spent} of ${total} used${hint ? " · " + hint : ""}${extraPoints(kind) ? ` · ${extraPoints(kind) > 0 ? "+" : ""}${extraPoints(kind)} from your character` : ""}</small></span>`;
+  document.getElementById("points").innerHTML = show("Active Points", totals.active, "", "active") +
+    show("Passive Points", totals.passive, "", "passive") +
+    show("Divinity", totals.mastery, `from level ${RULES.masteryFromLevel}`, "mastery") +
+    show("Attributes", attributeBudget(), "", "attribute");
 }
 
 function renderTabs() {

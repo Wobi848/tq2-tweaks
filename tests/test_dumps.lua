@@ -248,9 +248,9 @@ do
     check("character dump: level and the player's own attribute points, not another set's",
         character.level == 27 and might.points == 30 and character.attributes.knowledge.points == 12
         and character.attributes.vigor.points == 5)
-    check("character dump: point counters of the mastery component and unspent attribute points",
+    check("character dump: point counters of the mastery component and all attribute points granted",
         character.skillPoints.activeFromLevel == 54 and character.skillPoints.active == 56
-        and character.skillPoints.mastery == 36 and character.unspentAttributePoints == 3)
+        and character.skillPoints.mastery == 36 and character.grantedAttributePoints == 3)
     check("character dump: initial, base and current attribute values from the attributes component",
         might.initial == 50 and might.base == 200 and might.current == 207 and character.attributes.fitness.current == 222)
     check("character dump: file written and summary logged",
